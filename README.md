@@ -26,4 +26,17 @@ Nhóm demo trên ứng dụng web cục bộ do nhóm kiểm soát. Bộ quét d
 
 ## Kế hoạch thực hiện
 
-Repo hiện lưu phần giới thiệu và [bản phân công 6 tuần cho 5 thành viên](PHAN_CONG.md).
+Xem [bản phân công 6 tuần cho 5 thành viên](PHAN_CONG.md) và [thiết kế dashboard tuần 1](TUAN_1_THIET_KE_DASHBOARD.md).
+
+## Chạy dashboard tuần 2
+
+Dashboard tuần 2 hiển thị các lượt quét, phát hiện và cảnh báo mô phỏng. Bản mẫu đọc dữ liệu từ [sample_data.json](dashboard/sample_data.json).
+
+Từ thư mục gốc của repo, chạy:
+
+```text
+python -m pip install -r dashboard/requirements.txt
+python -m streamlit run dashboard/app.py --server.address 127.0.0.1
+```
+
+Mở `http://127.0.0.1:8501`. Màn hình mặc định có 4 lượt quét, 4 phát hiện và 2 cảnh báo. Thử lọc theo khoảng ngày, mục tiêu hoặc mức độ.

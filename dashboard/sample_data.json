@@ -1,0 +1,94 @@
+{
+  "scans": [
+    {
+      "scan_id": "SCAN-004",
+      "target": "http://127.0.0.1:8001",
+      "created_at": "2026-11-08T03:00:00Z",
+      "finished_at": "2026-11-08T03:00:05Z",
+      "status": "failed",
+      "pages_attempted": 1,
+      "error": "Không kết nối được đến mục tiêu demo."
+    },
+    {
+      "scan_id": "SCAN-003",
+      "target": "http://127.0.0.1:8000",
+      "created_at": "2026-11-07T17:05:00Z",
+      "finished_at": "2026-11-07T17:05:10Z",
+      "status": "partial",
+      "pages_attempted": 2,
+      "error": "Một trang vượt thời gian chờ."
+    },
+    {
+      "scan_id": "SCAN-002",
+      "target": "http://127.0.0.1:8001",
+      "created_at": "2026-11-07T07:00:00Z",
+      "finished_at": "2026-11-07T07:00:03Z",
+      "status": "completed",
+      "pages_attempted": 1,
+      "error": null
+    },
+    {
+      "scan_id": "SCAN-001",
+      "target": "http://127.0.0.1:8000",
+      "created_at": "2026-11-06T09:00:00Z",
+      "finished_at": "2026-11-06T09:00:04Z",
+      "status": "completed",
+      "pages_attempted": 3,
+      "error": null
+    }
+  ],
+  "findings": [
+    {
+      "finding_id": "FIND-004",
+      "scan_id": "SCAN-003",
+      "url": "http://127.0.0.1:8000/demo/partial",
+      "rule_id": "WEB-NOSNIFF",
+      "severity": "low",
+      "evidence": "Phản hồi HTML thiếu X-Content-Type-Options.",
+      "recommendation": "Thêm X-Content-Type-Options với giá trị nosniff."
+    },
+    {
+      "finding_id": "FIND-003",
+      "scan_id": "SCAN-001",
+      "url": "http://127.0.0.1:8000/demo/session",
+      "rule_id": "WEB-COOKIE-HTTPONLY",
+      "severity": "medium",
+      "evidence": "Cookie demo_session thiếu thuộc tính HttpOnly.",
+      "recommendation": "Thêm HttpOnly cho cookie phiên."
+    },
+    {
+      "finding_id": "FIND-002",
+      "scan_id": "SCAN-001",
+      "url": "http://127.0.0.1:8000/demo/headers",
+      "rule_id": "WEB-NOSNIFF",
+      "severity": "low",
+      "evidence": "Phản hồi HTML thiếu X-Content-Type-Options.",
+      "recommendation": "Thêm X-Content-Type-Options với giá trị nosniff."
+    },
+    {
+      "finding_id": "FIND-001",
+      "scan_id": "SCAN-001",
+      "url": "http://127.0.0.1:8000/demo/headers",
+      "rule_id": "WEB-CSP",
+      "severity": "medium",
+      "evidence": "Phản hồi HTML thiếu header Content-Security-Policy.",
+      "recommendation": "Thiết lập chính sách CSP phù hợp với tài nguyên của trang."
+    }
+  ],
+  "alerts": [
+    {
+      "alert_id": "ALERT-002",
+      "finding_id": "FIND-003",
+      "created_at": "2026-11-06T09:00:04Z",
+      "severity": "medium",
+      "status": "acknowledged"
+    },
+    {
+      "alert_id": "ALERT-001",
+      "finding_id": "FIND-001",
+      "created_at": "2026-11-06T09:00:04Z",
+      "severity": "medium",
+      "status": "open"
+    }
+  ]
+}
