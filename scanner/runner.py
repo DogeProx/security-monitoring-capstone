@@ -10,20 +10,18 @@ def run_scan(
     allowed_hosts,
     timeout=5,
     max_redirects=5,
-    progress_callback=None
+    progress_callback=None,
+    scan_id=None
 ):
-    """
-    Coordinate scanning multiple URLs.
-    """
+    """Điều phối quá trình quét nhiều URL."""
 
-    scan_id = str(uuid4())
+    scan_id = scan_id or str(uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
 
     results = []
     total = len(targets)
 
     for index, url in enumerate(targets, start=1):
-
         result = scan_url(
             url=url,
             allowed_hosts=allowed_hosts,
@@ -44,11 +42,18 @@ def run_scan(
 
     failed = total - completed
 
+    if total > 0 and completed == total:
+        status = "completed"
+    elif completed > 0:
+        status = "partial"
+    else:
+        status = "failed"
+
     finished_at = datetime.now(timezone.utc).isoformat()
 
     return {
         "scan_id": scan_id,
-        "status": "completed",
+        "status": status,
         "started_at": started_at,
         "finished_at": finished_at,
         "summary": {

@@ -8,9 +8,9 @@ from scanner.client import scan_url
 
 
 class TestHandler(BaseHTTPRequestHandler):
+    __test__ = False
 
     def do_GET(self):
-
         if self.path == "/ok":
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
