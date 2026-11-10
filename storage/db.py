@@ -1,4 +1,5 @@
 
+from contextlib import closing
 import sqlite3
 import json
 from uuid import uuid4
@@ -18,14 +19,18 @@ def get_connection(db_path: str):
     """Mở kết nối tới SQLite và bật chế độ khóa ngoại."""
     conn = sqlite3.connect(db_path, timeout=15.0)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
+    try:
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA journal_mode = WAL;")
+    except sqlite3.Error:
+        conn.close()
+        raise
     return conn
 
 
 def init_db(db_path: str):
     """Khởi tạo các bảng trong cơ sở dữ liệu."""
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS scans (
                 scan_id TEXT PRIMARY KEY,
@@ -50,6 +55,7 @@ def init_db(db_path: str):
                 rule_id TEXT NOT NULL,
                 severity TEXT NOT NULL,
                 evidence TEXT,
+                recommendation TEXT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (scan_id) REFERENCES scans(scan_id)
                     ON DELETE CASCADE,
@@ -91,16 +97,22 @@ def init_db(db_path: str):
                 finished_at TEXT
             );
         """)
+        conn.execute("BEGIN IMMEDIATE")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(findings)")}
+        if "recommendation" not in columns:
+            conn.execute("ALTER TABLE findings ADD COLUMN recommendation TEXT")
 
 
 def save_scan_report(db_path: str, report: dict):
     """Lưu báo cáo tổng quan của lượt quét."""
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         conn.execute("""
-            INSERT OR IGNORE INTO scans (
-                scan_id, started_at, finished_at, status
-            )
+            INSERT INTO scans (scan_id, started_at, finished_at, status)
             VALUES (?, ?, ?, ?)
+            ON CONFLICT(scan_id) DO UPDATE SET
+                started_at = excluded.started_at,
+                finished_at = excluded.finished_at,
+                status = excluded.status
         """, (
             report.get("scan_id"),
             report.get("started_at"),
@@ -108,15 +120,12 @@ def save_scan_report(db_path: str, report: dict):
             report.get("status")
         ))
 
-        for res in report.get("results", []):
-            conn.execute("""
-                INSERT INTO results (scan_id, url, status_code)
-                VALUES (?, ?, ?)
-            """, (
-                report.get("scan_id"),
-                res.get("url"),
-                res.get("status_code")
-            ))
+        scan_id = report["scan_id"]
+        conn.execute("DELETE FROM results WHERE scan_id = ?", (scan_id,))
+        conn.executemany(
+            "INSERT INTO results (scan_id, url, status_code) VALUES (?, ?, ?)",
+            [(scan_id, res.get("url"), res.get("status_code")) for res in report.get("results", [])],
+        )
 
 
 def record_finding_and_alert(
@@ -126,7 +135,8 @@ def record_finding_and_alert(
     rule_id: str,
     severity: str,
     evidence: str,
-    alert_threshold: str = "HIGH"
+    alert_threshold: str = "HIGH",
+    recommendation: str | None = None,
 ):
     """Lưu phát hiện và tự động tạo cảnh báo nếu vượt ngưỡng."""
 
@@ -134,18 +144,20 @@ def record_finding_and_alert(
     severity = severity.upper()
     alert_threshold = alert_threshold.upper()
 
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         conn.execute("""
-            INSERT OR IGNORE INTO findings (
-                scan_id, url, rule_id, severity, evidence, created_at
+            INSERT INTO findings (
+                scan_id, url, rule_id, severity, evidence, recommendation, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(scan_id, url, rule_id) DO UPDATE SET
+                recommendation = COALESCE(findings.recommendation, excluded.recommendation)
         """, (
-            scan_id, url, rule_id, severity, evidence, now
+            scan_id, url, rule_id, severity, evidence, recommendation, now
         ))
 
         row = conn.execute("""
-            SELECT finding_id
+            SELECT finding_id, severity
             FROM findings
             WHERE scan_id = ? AND url = ? AND rule_id = ?
         """, (scan_id, url, rule_id)).fetchone()
@@ -154,6 +166,7 @@ def record_finding_and_alert(
             return None
 
         finding_id = row["finding_id"]
+        severity = row["severity"]
 
         if SEVERITY_MAP.get(severity, 0) >= SEVERITY_MAP.get(
             alert_threshold, 3
@@ -188,7 +201,7 @@ def create_scan_job(db_path, targets, allowed_hosts):
     scan_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         conn.execute("""
             INSERT INTO scan_jobs (
                 scan_id,
@@ -211,21 +224,21 @@ def create_scan_job(db_path, targets, allowed_hosts):
     return scan_id
 
 
-def get_pending_scan_job(db_path):
+def get_pending_scan_job(db_path, scan_id=None):
     """Lấy yêu cầu đang chờ và chuyển sang RUNNING."""
 
     now = datetime.now(timezone.utc).isoformat()
 
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
 
         job = conn.execute("""
             SELECT *
             FROM scan_jobs
-            WHERE status = 'PENDING'
+            WHERE status = 'PENDING' AND (? IS NULL OR scan_id = ?)
             ORDER BY created_at ASC
             LIMIT 1
-        """).fetchone()
+        """, (scan_id, scan_id)).fetchone()
 
         if not job:
             return None
@@ -251,7 +264,7 @@ def update_scan_status(db_path, scan_id, status, error=None):
 
     now = datetime.now(timezone.utc).isoformat()
 
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         if status in ("COMPLETED", "FAILED", "PARTIAL"):
             conn.execute("""
                 UPDATE scan_jobs
@@ -272,7 +285,7 @@ def update_scan_status(db_path, scan_id, status, error=None):
 def update_scan_progress(db_path, scan_id, completed, total):
     """Cập nhật tiến độ quét."""
 
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         conn.execute("""
             UPDATE scan_jobs
             SET completed = ?,
@@ -283,11 +296,12 @@ def update_scan_progress(db_path, scan_id, completed, total):
 def recover_stuck_jobs(db_path):
     """Đưa các job RUNNING bị bỏ dở về PENDING khi khởi động lại Worker."""
 
-    with get_connection(db_path) as conn:
+    with closing(get_connection(db_path)) as conn, conn:
         cur = conn.execute("""
             UPDATE scan_jobs
             SET status = 'PENDING',
                 started_at = NULL,
+                completed = 0,
                 error = 'Job được khôi phục sau khi Worker khởi động lại'
             WHERE status = 'RUNNING'
         """)

@@ -1,7 +1,7 @@
 from .headers import check_csp, check_xcto
 from .cookies import check_httponly
 
-def analyze_response(response_data, session_cookie_names=["session_id", "JSESSIONID"]):
+def analyze_response(response_data, session_cookie_names=("session_id", "JSESSIONID")):
     findings = []
     
     # Header rules

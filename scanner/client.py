@@ -27,6 +27,7 @@ def scan_url(url, allowed_hosts, timeout=5, max_redirects=5):
         }
 
 
+    allowed_hosts = tuple(allowed_hosts)
     if not is_in_scope(url, allowed_hosts):
         return failed("URL is outside allowed scope")
 
@@ -110,7 +111,10 @@ def scan_url(url, allowed_hosts, timeout=5, max_redirects=5):
                         "final_url": response.url,
                         "status": "completed",
                         "status_code": response.status_code,
-                        "headers": dict(response.headers),
+                        "headers": {
+                            name: value for name, value in response.headers.items()
+                            if name.lower() not in {"set-cookie", "set-cookie2"}
+                        },
                         "cookies": cookies,
                         "redirect_count": redirect_count,
                         "scanned_at": datetime.now(

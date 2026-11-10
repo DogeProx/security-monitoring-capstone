@@ -18,6 +18,7 @@ def run_scan(
     scan_id = scan_id or str(uuid4())
     started_at = datetime.now(timezone.utc).isoformat()
 
+    allowed_hosts = tuple(allowed_hosts)
     results = []
     total = len(targets)
 

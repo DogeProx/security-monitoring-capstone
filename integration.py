@@ -1,58 +1,42 @@
+import argparse
+from pathlib import Path
 
-from scanner import run_scan
-from detection_rules.rules import analyze_response
-from storage.db import (
-    init_db,
-    save_scan_report,
-    record_finding_and_alert
-)
+from storage.db import create_scan_job, init_db
+from worker import process_one_job
 
-DB_PATH = "security_monitoring.db"
+
+DB_PATH = Path(__file__).with_name("security_monitoring.db")
+DEMO_ORIGIN = "http://127.0.0.1:5000"
+DEMO_TARGETS = [
+    f"{DEMO_ORIGIN}/secure",
+    f"{DEMO_ORIGIN}/vuln-headers",
+    f"{DEMO_ORIGIN}/vuln-cookie",
+]
 
 
 def scan_and_analyze(targets, allowed_hosts):
-    # 1. Khởi tạo database
     init_db(DB_PATH)
+    scan_id = create_scan_job(DB_PATH, targets, allowed_hosts)
+    return process_one_job(scan_id, db_path=DB_PATH)
 
-    # 2. Quét website
-    report = run_scan(
-        targets=targets,
-        allowed_hosts=allowed_hosts
-    )
 
-    # 3. Lưu báo cáo
-    save_scan_report(DB_PATH, report)
+def main():
+    parser = argparse.ArgumentParser(description="Chạy lượt quét web demo cục bộ.")
+    parser.add_argument("--enqueue", action="store_true", help="Đưa lượt quét vào hàng đợi cho worker.")
+    args = parser.parse_args()
 
-    # 4. Phân tích từng response
-    for response in report["results"]:
-        if response["status"] != "completed":
-            continue
+    if args.enqueue:
+        init_db(DB_PATH)
+        scan_id = create_scan_job(DB_PATH, DEMO_TARGETS, [DEMO_ORIGIN])
+        print("Đã tạo yêu cầu quét:", scan_id)
+        return 0
 
-        findings = analyze_response(response)
-
-        # 5. Lưu findings và tạo alerts
-        for finding in findings:
-            record_finding_and_alert(
-                db_path=DB_PATH,
-                scan_id=report["scan_id"],
-                url=response["url"],
-                rule_id=finding["rule_id"],
-                severity=finding["severity"],
-                evidence=finding["evidence"]
-            )
-
-    return report
+    report = scan_and_analyze(DEMO_TARGETS, [DEMO_ORIGIN])
+    if report is None:
+        return 1
+    print("Mã lượt quét:", report["scan_id"])
+    return int(report["status"] == "failed")
 
 
 if __name__ == "__main__":
-    report = scan_and_analyze(
-        targets=["https://example.com"],
-        allowed_hosts=["example.com"]
-    )
-
-    print("Scan ID:", report["scan_id"])
-    print("Summary:", report["summary"])
-
-    print("\nFindings:")
-    for response in report["results"]:
-        print("URL:", response["url"])
+    raise SystemExit(main())

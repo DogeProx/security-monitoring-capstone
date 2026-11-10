@@ -28,15 +28,47 @@ Nhóm demo trên ứng dụng web cục bộ do nhóm kiểm soát. Bộ quét d
 
 Xem [bản phân công 6 tuần cho 5 thành viên](PHAN_CONG.md) và [thiết kế dashboard tuần 1](TUAN_1_THIET_KE_DASHBOARD.md).
 
-## Chạy dashboard tuần 2
+## Chạy demo tích hợp
 
-Dashboard tuần 2 hiển thị các lượt quét, phát hiện và cảnh báo mô phỏng. Bản mẫu đọc dữ liệu từ [sample_data.json](dashboard/sample_data.json).
+Chạy các lệnh dưới đây từ thư mục gốc của repo với Python 3.11 trở lên.
 
-Từ thư mục gốc của repo, chạy:
+1. Cài thư viện.
+
+   ```text
+   python -m pip install -r dashboard/requirements.txt -r scanner/requirements.txt
+   ```
+
+2. Mở terminal thứ nhất và giữ web thử nghiệm chạy tại `http://127.0.0.1:5000`.
+
+   ```text
+   python Web_demo/app.py
+   ```
+
+3. Mở terminal thứ hai, quét ba trang demo rồi mở dashboard tại `http://127.0.0.1:8501`.
+
+   ```text
+   python integration.py
+   python -m streamlit run dashboard/app.py --server.address 127.0.0.1
+   ```
+
+   Lượt quét ghi dữ liệu thật vào `security_monitoring.db`. Trong cơ sở dữ liệu mới, kết quả dự kiến là **1 lượt quét, 3 URL, 5 phát hiện và 1 cảnh báo mức Cao**. Trang `/secure` có 0 phát hiện. Chọn mức **Cao** để xem phát hiện thiếu `HttpOnly` và cảnh báo liên quan.
+
+4. Xuất báo cáo từ SQLite trong terminal khác.
+
+   ```text
+   python -m Reporter.Export --database security_monitoring.db
+   ```
+
+   Lệnh tạo `report.csv` và `report.html` trong thư mục hiện tại. Báo cáo dùng thời gian UTC, dashboard hiển thị giờ Việt Nam.
+
+### Chạy worker riêng
+
+Giữ web demo hoạt động, chạy `python worker.py` trong một terminal rồi chạy `python integration.py --enqueue` trong terminal khác. Dùng một tiến trình worker cho cơ sở dữ liệu demo. Mở hoặc tải lại dashboard để xem kết quả sau khi worker xử lý.
+
+### Kiểm thử cục bộ
 
 ```text
-python -m pip install -r dashboard/requirements.txt
-python -m streamlit run dashboard/app.py --server.address 127.0.0.1
+python -m unittest scanner.test_client_edge_cases -v
+python detection_rules/test_rules.py -v
+python -m unittest discover -s tests -v
 ```
-
-Mở `http://127.0.0.1:8501`. Màn hình mặc định có 4 lượt quét, 4 phát hiện và 2 cảnh báo. Thử lọc theo khoảng ngày, mục tiêu hoặc mức độ.

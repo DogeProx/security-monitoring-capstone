@@ -1,4 +1,5 @@
 
+from contextlib import closing
 import sqlite3
 import json
 from datetime import datetime, timezone
@@ -6,6 +7,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import streamlit as st
+
+from storage.db import init_db
 
 
 DB_PATH = Path(__file__).resolve().parent.parent / "security_monitoring.db"
@@ -79,8 +82,9 @@ def show_table(rows, empty_message):
 def load_dashboard_data():
     """Đọc dữ liệu quét trực tiếp từ SQLite."""
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with closing(sqlite3.connect(DB_PATH)) as conn, conn:
         conn.row_factory = sqlite3.Row
+        conn.execute("BEGIN")
 
         jobs = conn.execute("""
             SELECT *
@@ -132,7 +136,7 @@ def load_dashboard_data():
             "severity": item["severity"].lower(),
             "evidence": item["evidence"],
             "recommendation": (
-                "Chưa có thông tin khắc phục trong database."
+                item["recommendation"] or "Chưa có thông tin khắc phục trong database."
             )
         })
 
@@ -173,13 +177,13 @@ def main():
 
     # Đọc dữ liệu từ database
     try:
+        init_db(DB_PATH)
         sample = load_dashboard_data()
 
     except sqlite3.Error as error:
         st.error(f"Không thể đọc database: {error}")
         st.info(
-            "Hãy kiểm tra security_monitoring.db "
-            "và đảm bảo Worker đã khởi tạo database."
+            "Hãy kiểm tra quyền đọc và ghi tệp security_monitoring.db."
         )
         return
 
@@ -194,7 +198,7 @@ def main():
     )
 
     if not scans:
-        st.info("Chưa có dữ liệu lượt quét.")
+        st.info("Chưa có dữ liệu lượt quét. Mở web demo và chạy python integration.py.")
         return
 
     # Chuẩn bị dữ liệu lọc
@@ -329,7 +333,7 @@ def main():
                         scan["status"],
                         scan["status"]
                     ),
-                    "URL hoàn tất": scan["completed"],
+                    "URL thành công": scan["completed"],
                     "Tổng URL": scan["total"],
                     "Thông tin lỗi": scan.get("error") or "—"
                 }

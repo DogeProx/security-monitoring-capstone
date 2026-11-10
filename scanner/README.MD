@@ -82,7 +82,7 @@ Danh sách URL
 
 ### 4.1. Scope Validation
 
-Chỉ cho phép scanner truy cập các hostname nằm trong danh sách `allowed_hosts`.
+Khai báo origin đầy đủ trong `allowed_hosts`, ví dụ `http://127.0.0.1:5000`, để giới hạn theo giao thức, hostname và cổng. Mục chỉ có hostname được áp dụng cho HTTP cổng 80 và HTTPS cổng 443.
 
 Nếu URL nằm ngoài phạm vi cho phép, scanner từ chối request.
 
@@ -159,7 +159,7 @@ Các tham số chính:
 | Tham số | Ý nghĩa |
 |---|---|
 | targets | Danh sách URL cần quét |
-| allowed_hosts | Danh sách hostname được phép |
+| allowed_hosts | Danh sách origin được phép hoặc hostname với các cổng HTTP/HTTPS mặc định |
 | timeout | Thời gian chờ request |
 | max_redirects | Số redirect tối đa |
 | progress_callback | Hàm cập nhật tiến độ |
