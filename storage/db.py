@@ -195,6 +195,31 @@ def record_finding_and_alert(
         return finding_id
 
 
+def transition_alert(db_path, alert_id, next_status):
+    """Cập nhật trạng thái cảnh báo và ghi lịch sử trong cùng giao dịch."""
+    transitions = {
+        "ACKNOWLEDGED": (("NEW",), "Đã xác nhận xem cảnh báo"),
+        "RESOLVED": (("NEW", "ACKNOWLEDGED"), "Đã xử lý cảnh báo"),
+    }
+    allowed, action = transitions[next_status]
+    placeholders = ", ".join("?" for _ in allowed)
+    now = datetime.now(timezone.utc).isoformat()
+
+    with closing(get_connection(db_path)) as conn, conn:
+        changed = conn.execute(
+            f"UPDATE alerts SET status = ?, updated_at = ? "
+            f"WHERE alert_id = ? AND status IN ({placeholders})",
+            (next_status, now, alert_id, *allowed),
+        )
+        if changed.rowcount == 0:
+            return False
+        conn.execute(
+            "INSERT INTO audit_logs (alert_id, action, timestamp_utc) VALUES (?, ?, ?)",
+            (alert_id, action, now),
+        )
+        return True
+
+
 def create_scan_job(db_path, targets, allowed_hosts):
     """Tạo một yêu cầu quét mới."""
 

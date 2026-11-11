@@ -2,7 +2,6 @@ import argparse
 from pathlib import Path
 
 from storage.db import create_scan_job, init_db
-from worker import process_one_job
 
 
 DB_PATH = Path(__file__).with_name("security_monitoring.db")
@@ -15,6 +14,8 @@ DEMO_TARGETS = [
 
 
 def scan_and_analyze(targets, allowed_hosts):
+    from worker import process_one_job
+
     init_db(DB_PATH)
     scan_id = create_scan_job(DB_PATH, targets, allowed_hosts)
     return process_one_job(scan_id, db_path=DB_PATH)
