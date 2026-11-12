@@ -1,3 +1,17 @@
+# Python
 .venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/

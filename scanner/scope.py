@@ -1,31 +1,50 @@
-from urllib.parse import urlparse
+from urllib.parse import urlsplit
 
 
-def normalize_host(url):
+DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _origin(url):
+    if not isinstance(url, str) or "\\" in url or any(ord(char) <= 32 for char in url):
+        return None
+
     try:
-        parsed = urlparse(url)
-
-        if parsed.scheme not in ("http", "https"):
+        parsed = urlsplit(url)
+        if parsed.scheme not in DEFAULT_PORTS or not parsed.hostname:
+            return None
+        if parsed.username is not None or parsed.password is not None:
             return None
 
-        if not parsed.hostname:
+        port = parsed.port
+        if port == 0:
             return None
-
-        return parsed.hostname.lower().rstrip(".")
-
+        return (
+            parsed.scheme,
+            parsed.hostname.rstrip("."),
+            DEFAULT_PORTS[parsed.scheme] if port is None else port,
+        )
     except ValueError:
         return None
 
 
-def is_in_scope(url, allowed_hosts):
-    host = normalize_host(url)
+def normalize_host(url):
+    origin = _origin(url)
+    return origin[1] if origin else None
 
-    if host is None:
+
+def is_in_scope(url, allowed_hosts):
+    origin = _origin(url)
+    if origin is None:
         return False
 
-    allowed_hosts = {
-        item.lower().rstrip(".")
-        for item in allowed_hosts
-    }
-
-    return host in allowed_hosts
+    scheme, host, port = origin
+    for allowed in allowed_hosts:
+        if _origin(allowed) == origin:
+            return True
+        if (
+            isinstance(allowed, str)
+            and allowed.lower().rstrip(".") == host
+            and port == DEFAULT_PORTS[scheme]
+        ):
+            return True
+    return False
