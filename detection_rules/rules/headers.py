@@ -1,31 +1,31 @@
-def get_headers_lower(response_data):
-    raw_headers = response_data.get("headers", {})
-    return {k.lower(): v for k, v in raw_headers.items()}
+from .headers import check_csp, check_xcto
+from .cookies import check_httponly
 
-def check_csp(response_data):
-    headers = get_headers_lower(response_data)
-    content_type = headers.get("content-type", "").lower()
-    
-    if "text/html" in content_type:
-        if "content-security-policy" not in headers:
-            return {
-                "rule_id": "SEC-HDR-CSP",
-                "severity": "Medium",
-                "evidence": "Missing Content-Security-Policy header in text/html response.",
-                "remediation": "Configure server to return Content-Security-Policy header."
-            }
-    return None
-
-def check_xcto(response_data):
-    headers = get_headers_lower(response_data)
-    xcto = headers.get("x-content-type-options", "").strip().lower()
-    
-    if xcto != "nosniff":
-        evidence = f"Header value is '{xcto}', expected 'nosniff'." if xcto else "Missing X-Content-Type-Options header."
-        return {
-            "rule_id": "SEC-HDR-XCTO",
-            "severity": "Low",
-            "evidence": evidence,
-            "remediation": "Configure server to return X-Content-Type-Options: nosniff."
+def analyze_response(response_data, config=None, session_cookie_names=["session_id", "JSESSIONID"]):
+    # Tuần 4: Thêm cấu hình bật/tắt quy tắc
+    if config is None:
+        config = {
+            "SEC-HDR-CSP": True,
+            "SEC-HDR-XCTO": True,
+            "SEC-CKI-HTTPONLY": True
         }
-    return None
+        
+    findings = []
+    
+    # Header rules
+    if config.get("SEC-HDR-CSP"):
+        csp_finding = check_csp(response_data)
+        if csp_finding:
+            findings.append(csp_finding)
+            
+    if config.get("SEC-HDR-XCTO"):
+        xcto_finding = check_xcto(response_data)
+        if xcto_finding:
+            findings.append(xcto_finding)
+            
+    # Cookie rules
+    if config.get("SEC-CKI-HTTPONLY"):
+        cookie_findings = check_httponly(response_data, session_cookie_names)
+        findings.extend(cookie_findings)
+        
+    return findings
