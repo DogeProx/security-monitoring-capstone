@@ -1,37 +1,23 @@
+import json
+from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Khung HTML & CSS dùng chung cho giao diện đẹp
+BASE_DIR = Path(__file__).resolve().parent
+CSS_PATH = BASE_DIR / "static" / "style.css"
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title} - Web Demo ATTT</title>
-    <style>
-        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; line-height: 1.6; padding: 20px; }}
-        .container {{ max-width: 800px; margin: 30px auto; background: #fff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }}
-        header {{ text-align: center; border-bottom: 2px solid #eef2f5; padding-bottom: 20px; margin-bottom: 25px; }}
-        h1 {{ color: #1e293b; font-size: 26px; margin-bottom: 8px; }}
-        p.subtitle {{ color: #64748b; font-size: 15px; }}
-        nav {{ display: flex; gap: 10px; justify-content: center; margin-bottom: 25px; wrap: flex-wrap; }}
-        nav a {{ text-decoration: none; padding: 8px 16px; border-radius: 6px; background: #f1f5f9; color: #475569; font-weight: 600; font-size: 14px; transition: all 0.2s; }}
-        nav a:hover {{ background: #e2e8f0; color: #0f172a; }}
-        nav a.active {{ background: #2563eb; color: #fff; }}
-        .card {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 20px; }}
-        .badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; }}
-        .badge-success {{ background: #dcfce7; color: #15803d; }}
-        .badge-danger {{ background: #fee2e2; color: #b91c1c; }}
-        .badge-warning {{ background: #fef3c7; color: #b45309; }}
-        .details {{ background: #0f172a; color: #38bdf8; padding: 15px; border-radius: 6px; font-family: 'Courier New', Courier, monospace; font-size: 13px; overflow-x: auto; margin-top: 15px; }}
-        footer {{ text-align: center; margin-top: 30px; font-size: 13px; color: #94a3b8; }}
-    </style>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>🛡️ Web Demo An Toàn Thông Tin</h1>
-            <p class="subtitle">Môi trường thử nghiệm bộ quét cấu hình bảo mật Web (GET Requests)</p>
+            <p class="subtitle">Môi trường thử nghiệm bộ quét cấu hình bảo mật Web (Tuần 1 - Tuần 4)</p>
         </header>
         
         <nav>
@@ -39,6 +25,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <a href="/secure" class="{active_secure}">/secure</a>
             <a href="/vuln-headers" class="{active_vuln_headers}">/vuln-headers</a>
             <a href="/vuln-cookie" class="{active_vuln_cookie}">/vuln-cookie</a>
+            <a href="/vuln-multi" class="{active_vuln_multi}">/vuln-multi</a>
+            <a href="/public-page" class="{active_public_page}">/public-page</a>
+            <a href="/api/data">/api/data</a>
         </nav>
 
         <main>
@@ -53,29 +42,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+
 class DemoHandler(BaseHTTPRequestHandler):
     def send_rendered_response(self, title, content, active_page, status=200, custom_headers=None, set_cookies=None):
         self.send_response(status)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
-        
-        # Thêm header tùy chỉnh nếu có
+
         if custom_headers:
             for key, value in custom_headers.items():
                 self.send_header(key, value)
-                
-        # Thêm cookie tùy chỉnh nếu có
+
         if set_cookies:
             for cookie in set_cookies:
                 self.send_header('Set-Cookie', cookie)
-                
+
         self.end_headers()
 
-        # Đánh dấu tab đang active
         active_dict = {
             'active_home': 'active' if active_page == 'home' else '',
             'active_secure': 'active' if active_page == 'secure' else '',
             'active_vuln_headers': 'active' if active_page == 'vuln_headers' else '',
-            'active_vuln_cookie': 'active' if active_page == 'vuln_cookie' else ''
+            'active_vuln_cookie': 'active' if active_page == 'vuln_cookie' else '',
+            'active_vuln_multi': 'active' if active_page == 'vuln_multi' else '',
+            'active_public_page': 'active' if active_page == 'public_page' else '',
         }
 
         html = HTML_TEMPLATE.format(
@@ -86,7 +75,18 @@ class DemoHandler(BaseHTTPRequestHandler):
         self.wfile.write(html.encode('utf-8'))
 
     def do_GET(self):
-        if self.path == '/secure':
+        if self.path == '/static/style.css':
+            if CSS_PATH.exists():
+                css_bytes = CSS_PATH.read_bytes()
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/css; charset=utf-8')
+                self.send_header('Content-Length', str(len(css_bytes)))
+                self.end_headers()
+                self.wfile.write(css_bytes)
+            else:
+                self.send_error(404, "Khong tim thay file style.css")
+
+        elif self.path == '/secure':
             content = """
             <div class="card">
                 <span class="badge badge-success">✓ Đạt chuẩn an toàn</span>
@@ -146,11 +146,71 @@ class DemoHandler(BaseHTTPRequestHandler):
                 set_cookies=['session_id=token456; Path=/']
             )
 
-        else: # Trang chủ '/'
+        elif self.path == '/vuln-multi':
+            content = """
+            <div class="card">
+                <span class="badge badge-danger">⚠ Nhiều lỗ hổng đồng thời (Tuần 4)</span>
+                <h2>Trang Chứa Nhiều Lỗi Cấu Hình</h2>
+                <p>Trang này kết hợp nhiều lỗi cùng lúc để kiểm thử khả năng ghi nhận đa phát hiện trong một lượt quét.</p>
+                <div class="details">
+                    - Content-Security-Policy: [THIẾU]<br>
+                    - X-Content-Type-Options: [THIẾU]<br>
+                    - Set-Cookie: session_id=xyz987654321; Path=/ (Thiếu HttpOnly)<br>
+                    - Server: Apache/2.4.49 (Unix) OpenSSL/1.1.1k (Lộ thông tin phiên bản)
+                </div>
+            </div>
+            """
+            self.send_rendered_response(
+                title="Nhiều Lỗ Hổng",
+                content=content,
+                active_page="vuln_multi",
+                custom_headers={
+                    'Server': 'Apache/2.4.49 (Unix) OpenSSL/1.1.1k'
+                },
+                set_cookies=['session_id=xyz987654321; Path=/']
+            )
+
+        elif self.path == '/public-page':
+            content = """
+            <div class="card">
+                <span class="badge badge-info">ℹ Trang công khai sạch (Tuần 4)</span>
+                <h2>Trang Không Đặt Cookie Phiên</h2>
+                <p>Trang này cấu hình đầy đủ Security Headers nhưng không dùng Cookie, dùng để kiểm tra hệ thống không báo nhầm lỗi Cookie.</p>
+                <div class="details">
+                    + Content-Security-Policy: default-src 'self'<br>
+                    + X-Content-Type-Options: nosniff<br>
+                    + Set-Cookie: [KHÔNG CÓ]
+                </div>
+            </div>
+            """
+            self.send_rendered_response(
+                title="Trang Công Khai",
+                content=content,
+                active_page="public_page",
+                custom_headers={
+                    'Content-Security-Policy': "default-src 'self'",
+                    'X-Content-Type-Options': 'nosniff'
+                }
+            )
+
+        elif self.path == '/api/data':
+            payload = json.dumps({
+                "status": "success",
+                "message": "Du lieu API JSON phuc vu kiem thu chong bao sai",
+                "data": [1, 2, 3]
+            }, ensure_ascii=False).encode('utf-8')
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Length', str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        else:
             content = """
             <div class="card">
                 <h2>Chào mừng đến với Web Demo</h2>
-                <p>Đây là ứng dụng web thử nghiệm phục vụ cho bài tập đồ án. Nhấn vào các đường dẫn trên thanh menu để truy cập các trang tình huống kiểm thử bảo mật.</p>
+                <p>Đây là ứng dụng web thử nghiệm phục vụ cho bài tập đồ án. Nhấn vào các đường dẫn trên thanh menu để truy cập các trang tình huống kiểm thử bảo mật (Tuần 1 - Tuần 4).</p>
             </div>
             """
             self.send_rendered_response(
@@ -159,10 +219,15 @@ class DemoHandler(BaseHTTPRequestHandler):
                 active_page="home"
             )
 
+
 if __name__ == '__main__':
     server = HTTPServer(('127.0.0.1', 5000), DemoHandler)
     print("--------------------------------------------------")
-    print("  🚀 Web Demo ATTT đã sẵn sàng!")
+    print("  🚀 Web Demo ATTT đã sẵn sàng (6 Endpoints)!")
     print("  🌐 Truy cập giao diện tại: http://127.0.0.1:5000")
     print("--------------------------------------------------")
+try:
     server.serve_forever()
+except KeyboardInterrupt:
+    print("\n🛑 Đã dừng Web Demo.")
+    server.server_close()
