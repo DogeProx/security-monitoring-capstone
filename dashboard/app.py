@@ -1,4 +1,5 @@
 
+from collections import defaultdict
 from contextlib import closing
 import sqlite3
 import json
@@ -8,7 +9,8 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from storage.db import init_db
+from integration import DEMO_ORIGIN, DEMO_TARGETS
+from storage.db import create_scan_job, init_db, transition_alert
 
 
 DB_PATH = Path(__file__).resolve().parent.parent / "security_monitoring.db"
@@ -104,6 +106,16 @@ def load_dashboard_data():
             ORDER BY updated_at DESC
         """).fetchall()
 
+        audit_rows = conn.execute("""
+            SELECT alert_id, action, timestamp_utc
+            FROM audit_logs
+            ORDER BY timestamp_utc, log_id
+        """).fetchall()
+
+    history = defaultdict(list)
+    for row in audit_rows:
+        history[row["alert_id"]].append((row["timestamp_utc"], row["action"]))
+
     scans = []
 
     for job in jobs:
@@ -151,7 +163,8 @@ def load_dashboard_data():
         alerts.append({
             "alert_id": item["alert_id"],
             "finding_id": item["finding_id"],
-            "created_at": item["updated_at"],
+            "updated_at": item["updated_at"],
+            "history": history[item["alert_id"]],
             "severity": item["severity"].lower(),
             "status": status
         })
@@ -161,6 +174,60 @@ def load_dashboard_data():
         "findings": findings,
         "alerts": alerts
     }
+
+
+def show_scan_controls():
+    st.subheader("Tạo lượt quét")
+    choices = {"Tất cả trang demo": DEMO_TARGETS}
+    choices.update({url.removeprefix(DEMO_ORIGIN): [url] for url in DEMO_TARGETS})
+    selection = st.selectbox("Mục tiêu quét", list(choices), key="scan_selection")
+    st.caption("Khởi động web demo và worker để xử lý lượt quét đang chờ.")
+    queue_col, refresh_col = st.columns(2)
+    if queue_col.button("Đưa vào hàng đợi", type="primary", key="queue_scan"):
+        scan_id = create_scan_job(DB_PATH, choices[selection], [DEMO_ORIGIN])
+        st.success(f"Đã tạo lượt quét {scan_id}.")
+    refresh_col.button("Tải lại kết quả", key="refresh_results")
+
+
+def show_alerts(alerts, findings):
+    if not alerts:
+        st.info("Không có cảnh báo phù hợp với bộ lọc.")
+        return
+
+    for alert in alerts:
+        alert_id = alert["alert_id"]
+        status = alert["status"]
+        finding = findings[alert["finding_id"]]
+        label = ALERT_LABELS.get(status, status)
+        with st.expander(f"Cảnh báo {alert_id} · {label}"):
+            st.text(f"URL: {finding['url']}")
+            st.text(f"Mã phát hiện: {finding['finding_id']} · {finding['rule_id']}")
+            st.text(f"Mức độ: {SEVERITY_LABELS.get(alert['severity'], alert['severity'])}")
+            st.text(f"Cập nhật: {display_time(alert['updated_at'])}")
+            st.text(f"Bằng chứng: {finding['evidence']}")
+            st.text(f"Khắc phục: {finding['recommendation']}")
+
+            if status == "open" and st.button("Xác nhận đã xem", key=f"ack_{alert_id}"):
+                apply_alert_transition(alert_id, "ACKNOWLEDGED")
+            if status in {"open", "acknowledged"} and st.button(
+                "Đánh dấu đã xử lý", key=f"resolve_{alert_id}"
+            ):
+                apply_alert_transition(alert_id, "RESOLVED")
+
+            st.markdown("**Lịch sử cảnh báo**")
+            if not alert["history"]:
+                st.caption("Chưa có mục lịch sử.")
+            for timestamp, action in alert["history"]:
+                st.text(f"{display_time(timestamp)} · {action}")
+
+
+def apply_alert_transition(alert_id, next_status):
+    try:
+        transition_alert(DB_PATH, alert_id, next_status)
+    except sqlite3.Error as error:
+        st.error(f"Không thể cập nhật cảnh báo: {error}")
+    else:
+        st.rerun()
 
 
 def main():
@@ -178,6 +245,7 @@ def main():
     # Đọc dữ liệu từ database
     try:
         init_db(DB_PATH)
+        show_scan_controls()
         sample = load_dashboard_data()
 
     except sqlite3.Error as error:
@@ -198,7 +266,7 @@ def main():
     )
 
     if not scans:
-        st.info("Chưa có dữ liệu lượt quét. Mở web demo và chạy python integration.py.")
+        st.info("Chưa có lượt quét. Chọn mục tiêu demo để tạo lượt quét đầu tiên.")
         return
 
     # Chuẩn bị dữ liệu lọc
@@ -284,7 +352,7 @@ def main():
             item for item in sample["alerts"]
             if item["finding_id"] in findings
         ),
-        key=lambda alert: alert["created_at"] or "",
+        key=lambda alert: alert["updated_at"] or "",
         reverse=True
     )
 
@@ -363,28 +431,8 @@ def main():
             "Không có phát hiện phù hợp với bộ lọc."
         )
 
-    # Tab alerts
     with alert_tab:
-        show_table(
-            [
-                {
-                    "Mã cảnh báo": alert["alert_id"],
-                    "Thời gian": display_time(alert["created_at"]),
-                    "Mã phát hiện": alert["finding_id"],
-                    "URL": findings[alert["finding_id"]]["url"],
-                    "Mức độ": SEVERITY_LABELS.get(
-                        alert["severity"],
-                        alert["severity"]
-                    ),
-                    "Trạng thái": ALERT_LABELS.get(
-                        alert["status"],
-                        alert["status"]
-                    )
-                }
-                for alert in alerts
-            ],
-            "Không có cảnh báo phù hợp với bộ lọc."
-        )
+        show_alerts(alerts, findings)
 
 
 if __name__ == "__main__":

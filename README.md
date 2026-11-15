@@ -65,6 +65,12 @@ Chạy các lệnh dưới đây từ thư mục gốc của repo với Python 3
 
 Giữ web demo hoạt động, chạy `python worker.py` trong một terminal rồi chạy `python integration.py --enqueue` trong terminal khác. Dùng một tiến trình worker cho cơ sở dữ liệu demo. Mở hoặc tải lại dashboard để xem kết quả sau khi worker xử lý.
 
+### Tạo lượt quét và xử lý cảnh báo trên dashboard
+
+Giữ web demo hoạt động và chạy `python worker.py`. Trong dashboard, chọn một trang hoặc tất cả trang demo ở **Mục tiêu quét**, rồi bấm **Đưa vào hàng đợi**. Bấm **Tải lại kết quả** để xem trạng thái và số URL thành công.
+
+Ở tab **Cảnh báo**, mở bản ghi để xem phát hiện, bằng chứng, cách khắc phục và lịch sử. Chọn **Xác nhận đã xem** hoặc **Đánh dấu đã xử lý**. Dashboard ghi mỗi lần chuyển trạng thái vào lịch sử SQLite.
+
 ### Kiểm thử cục bộ
 
 ```text

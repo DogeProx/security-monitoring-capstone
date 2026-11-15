@@ -293,7 +293,7 @@ def record_finding_and_alert(
 
 
 def transition_alert(db_path, alert_id, next_status):
-    """Cập nhật trạng thái Alert và ghi lịch sử."""
+    """Cập nhật trạng thái Alert và ghi lịch sử trong cùng transaction."""
 
     transitions = {
         "ACKNOWLEDGED": (
@@ -347,7 +347,6 @@ def transition_alert(db_path, alert_id, next_status):
             action,
             now
         ))
-
         return True
 
 

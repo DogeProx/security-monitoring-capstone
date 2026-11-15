@@ -6,6 +6,7 @@ def check_csp(response_data):
     headers = get_headers_lower(response_data)
     content_type = headers.get("content-type", "").lower()
     
+    # Tuần 4: Loại trừ API JSON để tránh báo sai (false positive)
     if "text/html" in content_type:
         if "content-security-policy" not in headers:
             return {
