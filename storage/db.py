@@ -2,7 +2,6 @@
 from contextlib import closing
 import sqlite3
 import json
-
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 
@@ -16,12 +15,8 @@ SEVERITY_MAP = {
 }
 
 
-# =========================================================
-# 1. DATABASE CONNECTION
-# =========================================================
-
 def get_connection(db_path: str):
-    """Mở kết nối SQLite và bật khóa ngoại, WAL."""
+    """Mở kết nối SQLite và bật chế độ khóa ngoại."""
 
     conn = sqlite3.connect(db_path, timeout=15.0)
     conn.row_factory = sqlite3.Row
@@ -36,16 +31,11 @@ def get_connection(db_path: str):
     return conn
 
 
-# =========================================================
-# 2. INITIALIZE DATABASE
-# =========================================================
-
 def init_db(db_path: str):
     """Khởi tạo các bảng trong cơ sở dữ liệu."""
 
     with closing(get_connection(db_path)) as conn, conn:
         conn.executescript("""
-
             CREATE TABLE IF NOT EXISTS scans (
                 scan_id TEXT PRIMARY KEY,
                 started_at TEXT NOT NULL,
@@ -128,16 +118,13 @@ def init_db(db_path: str):
                 scheduled_for TEXT NOT NULL,
                 scan_id TEXT NOT NULL UNIQUE,
                 created_at TEXT NOT NULL,
-
                 UNIQUE (schedule_id, scheduled_for),
-
                 FOREIGN KEY (schedule_id)
                     REFERENCES scheduled_scans(schedule_id)
+                    ON DELETE CASCADE
             );
-
         """)
 
-        # Migration cho Database cũ.
         columns = {
             row["name"]
             for row in conn.execute(
@@ -151,15 +138,10 @@ def init_db(db_path: str):
             )
 
 
-# =========================================================
-# 3. SAVE SCAN REPORT
-# =========================================================
-
 def save_scan_report(db_path: str, report: dict):
     """Lưu báo cáo tổng quan của lượt quét."""
 
     with closing(get_connection(db_path)) as conn, conn:
-
         conn.execute("""
             INSERT INTO scans (
                 scan_id,
@@ -168,7 +150,6 @@ def save_scan_report(db_path: str, report: dict):
                 status
             )
             VALUES (?, ?, ?, ?)
-
             ON CONFLICT(scan_id) DO UPDATE SET
                 started_at = excluded.started_at,
                 finished_at = excluded.finished_at,
@@ -187,26 +168,25 @@ def save_scan_report(db_path: str, report: dict):
             (scan_id,)
         )
 
-        conn.executemany("""
+        conn.executemany(
+            """
             INSERT INTO results (
                 scan_id,
                 url,
                 status_code
             )
             VALUES (?, ?, ?)
-        """, [
-            (
-                scan_id,
-                result.get("url"),
-                result.get("status_code")
-            )
-            for result in report.get("results", [])
-        ])
+            """,
+            [
+                (
+                    scan_id,
+                    result.get("url"),
+                    result.get("status_code")
+                )
+                for result in report.get("results", [])
+            ]
+        )
 
-
-# =========================================================
-# 4. FINDINGS AND ALERTS
-# =========================================================
 
 def record_finding_and_alert(
     db_path: str,
@@ -216,9 +196,9 @@ def record_finding_and_alert(
     severity: str,
     evidence: str,
     alert_threshold: str = "HIGH",
-    recommendation: str | None = None
+    recommendation: str | None = None,
 ):
-    """Lưu phát hiện và tạo cảnh báo nếu vượt ngưỡng."""
+    """Lưu Finding và tự động tạo Alert nếu vượt ngưỡng."""
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -226,7 +206,6 @@ def record_finding_and_alert(
     alert_threshold = alert_threshold.upper()
 
     with closing(get_connection(db_path)) as conn, conn:
-
         conn.execute("""
             INSERT INTO findings (
                 scan_id,
@@ -238,7 +217,6 @@ def record_finding_and_alert(
                 created_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
-
             ON CONFLICT(scan_id, url, rule_id) DO UPDATE SET
                 recommendation = COALESCE(
                     findings.recommendation,
@@ -275,7 +253,6 @@ def record_finding_and_alert(
         if SEVERITY_MAP.get(severity, 0) >= SEVERITY_MAP.get(
             alert_threshold, 3
         ):
-
             cur = conn.execute("""
                 INSERT OR IGNORE INTO alerts (
                     scan_id,
@@ -311,21 +288,72 @@ def record_finding_and_alert(
         return finding_id
 
 
-# =========================================================
-# 5. SCAN JOB QUEUE
-# =========================================================
+def transition_alert(db_path, alert_id, next_status):
+    """Cập nhật trạng thái Alert và ghi lịch sử."""
+
+    transitions = {
+        "ACKNOWLEDGED": (
+            ("NEW",),
+            "Đã xác nhận xem cảnh báo"
+        ),
+        "RESOLVED": (
+            ("NEW", "ACKNOWLEDGED"),
+            "Đã xử lý cảnh báo"
+        ),
+    }
+
+    if next_status not in transitions:
+        raise ValueError(
+            f"Trạng thái không hợp lệ: {next_status}"
+        )
+
+    allowed, action = transitions[next_status]
+    placeholders = ", ".join("?" for _ in allowed)
+    now = datetime.now(timezone.utc).isoformat()
+
+    with closing(get_connection(db_path)) as conn, conn:
+        changed = conn.execute(
+            f"""
+            UPDATE alerts
+            SET status = ?,
+                updated_at = ?
+            WHERE alert_id = ?
+              AND status IN ({placeholders})
+            """,
+            (
+                next_status,
+                now,
+                alert_id,
+                *allowed
+            )
+        )
+
+        if changed.rowcount == 0:
+            return False
+
+        conn.execute("""
+            INSERT INTO audit_logs (
+                alert_id,
+                action,
+                timestamp_utc
+            )
+            VALUES (?, ?, ?)
+        """, (
+            alert_id,
+            action,
+            now
+        ))
+
+        return True
+
 
 def create_scan_job(db_path, targets, allowed_hosts):
     """Tạo một yêu cầu quét mới."""
-
-    if not targets:
-        raise ValueError("Danh sách targets không được rỗng.")
 
     scan_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
     with closing(get_connection(db_path)) as conn, conn:
-
         conn.execute("""
             INSERT INTO scan_jobs (
                 scan_id,
@@ -349,12 +377,11 @@ def create_scan_job(db_path, targets, allowed_hosts):
 
 
 def get_pending_scan_job(db_path, scan_id=None):
-    """Lấy yêu cầu đang chờ và chuyển sang RUNNING."""
+    """Lấy Job đang chờ và chuyển sang RUNNING."""
 
     now = datetime.now(timezone.utc).isoformat()
 
     with closing(get_connection(db_path)) as conn, conn:
-
         conn.execute("BEGIN IMMEDIATE")
 
         job = conn.execute("""
@@ -372,7 +399,7 @@ def get_pending_scan_job(db_path, scan_id=None):
         if not job:
             return None
 
-        cursor = conn.execute("""
+        conn.execute("""
             UPDATE scan_jobs
             SET status = 'RUNNING',
                 started_at = ?
@@ -383,9 +410,6 @@ def get_pending_scan_job(db_path, scan_id=None):
             job["scan_id"]
         ))
 
-        if cursor.rowcount != 1:
-            return None
-
         return {
             "scan_id": job["scan_id"],
             "targets": json.loads(job["targets"]),
@@ -394,15 +418,18 @@ def get_pending_scan_job(db_path, scan_id=None):
         }
 
 
-def update_scan_status(db_path, scan_id, status, error=None):
+def update_scan_status(
+    db_path,
+    scan_id,
+    status,
+    error=None
+):
     """Cập nhật trạng thái yêu cầu quét."""
 
     now = datetime.now(timezone.utc).isoformat()
 
     with closing(get_connection(db_path)) as conn, conn:
-
         if status in ("COMPLETED", "FAILED", "PARTIAL"):
-
             conn.execute("""
                 UPDATE scan_jobs
                 SET status = ?,
@@ -415,9 +442,7 @@ def update_scan_status(db_path, scan_id, status, error=None):
                 now,
                 scan_id
             ))
-
         else:
-
             conn.execute("""
                 UPDATE scan_jobs
                 SET status = ?,
@@ -430,11 +455,15 @@ def update_scan_status(db_path, scan_id, status, error=None):
             ))
 
 
-def update_scan_progress(db_path, scan_id, completed, total):
+def update_scan_progress(
+    db_path,
+    scan_id,
+    completed,
+    total
+):
     """Cập nhật tiến độ quét."""
 
     with closing(get_connection(db_path)) as conn, conn:
-
         conn.execute("""
             UPDATE scan_jobs
             SET completed = ?,
@@ -448,10 +477,9 @@ def update_scan_progress(db_path, scan_id, completed, total):
 
 
 def recover_stuck_jobs(db_path):
-    """Khôi phục job RUNNING bị bỏ dở khi Worker khởi động lại."""
+    """Đưa các Job RUNNING bị bỏ dở về PENDING."""
 
     with closing(get_connection(db_path)) as conn, conn:
-
         cur = conn.execute("""
             UPDATE scan_jobs
             SET status = 'PENDING',
@@ -464,9 +492,9 @@ def recover_stuck_jobs(db_path):
         return cur.rowcount
 
 
-# =========================================================
-# 6. SCHEDULED SCAN
-# =========================================================
+# ============================================================
+# SCHEDULED SCAN
+# ============================================================
 
 def create_scheduled_scan(
     db_path,
@@ -475,24 +503,23 @@ def create_scheduled_scan(
     allowed_hosts,
     interval_seconds
 ):
-    """Tạo cấu hình lịch quét định kỳ."""
+    """Tạo một lịch quét định kỳ."""
 
     if interval_seconds <= 0:
-        raise ValueError("interval_seconds phải lớn hơn 0.")
+        raise ValueError(
+            "Chu kỳ quét phải lớn hơn 0 giây."
+        )
 
     if not targets:
-        raise ValueError("Danh sách targets không được rỗng.")
+        raise ValueError(
+            "Phải có ít nhất một URL mục tiêu."
+        )
 
     now = datetime.now(timezone.utc)
-
-    next_run = now + timedelta(
-        seconds=interval_seconds
-    )
-
+    next_run = now + timedelta(seconds=interval_seconds)
     schedule_id = str(uuid4())
 
     with closing(get_connection(db_path)) as conn, conn:
-
         conn.execute("""
             INSERT INTO scheduled_scans (
                 schedule_id,
@@ -518,21 +545,27 @@ def create_scheduled_scan(
     return schedule_id
 
 
-def create_due_scheduled_jobs(db_path):
+def create_due_scheduled_jobs(db_path, now=None):
     """
     Tạo Scan Job cho các lịch đã đến hạn.
 
-    UNIQUE(schedule_id, scheduled_for) bảo đảm
-    mỗi lịch chỉ tạo một job cho một mốc thời gian.
+    Chính sách A:
+    - Chỉ tạo một job cho mỗi lịch đến hạn.
+    - Bỏ qua toàn bộ các lần chạy đã lỡ.
+    - Lần chạy tiếp theo = thời điểm hiện tại + interval.
     """
 
-    now = datetime.now(timezone.utc)
-    now_text = now.isoformat(timespec="seconds")
+    if now is None:
+        now = datetime.now(timezone.utc)
 
+    if now.tzinfo is None:
+        raise ValueError("now phải là datetime có timezone.")
+
+    now = now.astimezone(timezone.utc)
+    now_text = now.isoformat(timespec="seconds")
     created_jobs = []
 
     with closing(get_connection(db_path)) as conn, conn:
-
         # Khóa ghi để tránh hai Scheduler xử lý cùng lúc.
         conn.execute("BEGIN IMMEDIATE")
 
@@ -545,7 +578,6 @@ def create_due_scheduled_jobs(db_path):
         """, (now_text,)).fetchall()
 
         for schedule in schedules:
-
             scheduled_for = schedule["next_run_at"]
             scan_id = str(uuid4())
 
@@ -566,7 +598,6 @@ def create_due_scheduled_jobs(db_path):
             ))
 
             if cursor.rowcount > 0:
-
                 targets = json.loads(schedule["targets"])
                 allowed_hosts = json.loads(
                     schedule["allowed_hosts"]
@@ -594,12 +625,9 @@ def create_due_scheduled_jobs(db_path):
 
                 created_jobs.append(scan_id)
 
-            # Tính lần chạy tiếp theo dựa trên mốc cũ.
-            previous_run = datetime.fromisoformat(
-                scheduled_for
-            )
-
-            next_run = previous_run + timedelta(
+            # Bỏ qua các mốc chạy đã lỡ.
+            # Bắt đầu chu kỳ mới từ thời điểm hiện tại.
+            next_run = now + timedelta(
                 seconds=schedule["interval_seconds"]
             )
 
@@ -616,29 +644,45 @@ def create_due_scheduled_jobs(db_path):
 
 
 def get_scheduled_scans(db_path):
-    """Lấy danh sách lịch quét."""
+    """Lấy danh sách các lịch quét."""
 
     with closing(get_connection(db_path)) as conn:
-
-        return conn.execute("""
+        schedules = conn.execute("""
             SELECT *
             FROM scheduled_scans
             ORDER BY created_at DESC
         """).fetchall()
 
+        return [
+            {
+                "schedule_id": row["schedule_id"],
+                "name": row["name"],
+                "targets": json.loads(row["targets"]),
+                "allowed_hosts": json.loads(row["allowed_hosts"]),
+                "interval_seconds": row["interval_seconds"],
+                "next_run_at": row["next_run_at"],
+                "enabled": bool(row["enabled"]),
+                "created_at": row["created_at"]
+            }
+            for row in schedules
+        ]
 
-def set_scheduled_scan_status(db_path, schedule_id, enabled):
+
+def set_scheduled_scan_status(
+    db_path,
+    schedule_id,
+    enabled
+):
     """Bật hoặc tắt một lịch quét."""
 
     with closing(get_connection(db_path)) as conn, conn:
-
         cursor = conn.execute("""
             UPDATE scheduled_scans
             SET enabled = ?
             WHERE schedule_id = ?
         """, (
-            1 if enabled else 0,
+            int(bool(enabled)),
             schedule_id
         ))
 
-        return cursor.rowcount
+        return cursor.rowcount > 0
