@@ -2,12 +2,12 @@ import sys
 import sqlite3
 from pathlib import Path
 
-# Thêm thư mục gốc dự án vào sys.path để import được integration và reporter
+# Thêm thư mục gốc dự án vào sys.path để import được integration và Reporter
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from integration import scan_and_analyze, DB_PATH, DEMO_ORIGIN
-from reporter.sqlite_exporter import SQLiteReportExporter
+from Reporter.sqlite_exporter import SQLiteReportExporter
 
 
 def test_week3_full_pipeline():
