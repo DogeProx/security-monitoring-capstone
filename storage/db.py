@@ -2,8 +2,9 @@
 from contextlib import closing
 import sqlite3
 import json
+
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 SEVERITY_MAP = {
@@ -15,23 +16,36 @@ SEVERITY_MAP = {
 }
 
 
+# =========================================================
+# 1. DATABASE CONNECTION
+# =========================================================
+
 def get_connection(db_path: str):
-    """Mở kết nối tới SQLite và bật chế độ khóa ngoại."""
+    """Mở kết nối SQLite và bật khóa ngoại, WAL."""
+
     conn = sqlite3.connect(db_path, timeout=15.0)
     conn.row_factory = sqlite3.Row
+
     try:
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA journal_mode = WAL;")
     except sqlite3.Error:
         conn.close()
         raise
+
     return conn
 
 
+# =========================================================
+# 2. INITIALIZE DATABASE
+# =========================================================
+
 def init_db(db_path: str):
     """Khởi tạo các bảng trong cơ sở dữ liệu."""
+
     with closing(get_connection(db_path)) as conn, conn:
         conn.executescript("""
+
             CREATE TABLE IF NOT EXISTS scans (
                 scan_id TEXT PRIMARY KEY,
                 started_at TEXT NOT NULL,
@@ -96,19 +110,65 @@ def init_db(db_path: str):
                 started_at TEXT,
                 finished_at TEXT
             );
-        """)
-        conn.execute("BEGIN IMMEDIATE")
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(findings)")}
-        if "recommendation" not in columns:
-            conn.execute("ALTER TABLE findings ADD COLUMN recommendation TEXT")
 
+            CREATE TABLE IF NOT EXISTS scheduled_scans (
+                schedule_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                targets TEXT NOT NULL,
+                allowed_hosts TEXT NOT NULL,
+                interval_seconds INTEGER NOT NULL,
+                next_run_at TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS scheduled_scan_runs (
+                run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                schedule_id TEXT NOT NULL,
+                scheduled_for TEXT NOT NULL,
+                scan_id TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+
+                UNIQUE (schedule_id, scheduled_for),
+
+                FOREIGN KEY (schedule_id)
+                    REFERENCES scheduled_scans(schedule_id)
+            );
+
+        """)
+
+        # Migration cho Database cũ.
+        columns = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(findings)"
+            )
+        }
+
+        if "recommendation" not in columns:
+            conn.execute(
+                "ALTER TABLE findings ADD COLUMN recommendation TEXT"
+            )
+
+
+# =========================================================
+# 3. SAVE SCAN REPORT
+# =========================================================
 
 def save_scan_report(db_path: str, report: dict):
     """Lưu báo cáo tổng quan của lượt quét."""
+
     with closing(get_connection(db_path)) as conn, conn:
+
         conn.execute("""
-            INSERT INTO scans (scan_id, started_at, finished_at, status)
+            INSERT INTO scans (
+                scan_id,
+                started_at,
+                finished_at,
+                status
+            )
             VALUES (?, ?, ?, ?)
+
             ON CONFLICT(scan_id) DO UPDATE SET
                 started_at = excluded.started_at,
                 finished_at = excluded.finished_at,
@@ -121,12 +181,32 @@ def save_scan_report(db_path: str, report: dict):
         ))
 
         scan_id = report["scan_id"]
-        conn.execute("DELETE FROM results WHERE scan_id = ?", (scan_id,))
-        conn.executemany(
-            "INSERT INTO results (scan_id, url, status_code) VALUES (?, ?, ?)",
-            [(scan_id, res.get("url"), res.get("status_code")) for res in report.get("results", [])],
+
+        conn.execute(
+            "DELETE FROM results WHERE scan_id = ?",
+            (scan_id,)
         )
 
+        conn.executemany("""
+            INSERT INTO results (
+                scan_id,
+                url,
+                status_code
+            )
+            VALUES (?, ?, ?)
+        """, [
+            (
+                scan_id,
+                result.get("url"),
+                result.get("status_code")
+            )
+            for result in report.get("results", [])
+        ])
+
+
+# =========================================================
+# 4. FINDINGS AND ALERTS
+# =========================================================
 
 def record_finding_and_alert(
     db_path: str,
@@ -136,31 +216,55 @@ def record_finding_and_alert(
     severity: str,
     evidence: str,
     alert_threshold: str = "HIGH",
-    recommendation: str | None = None,
+    recommendation: str | None = None
 ):
-    """Lưu phát hiện và tự động tạo cảnh báo nếu vượt ngưỡng."""
+    """Lưu phát hiện và tạo cảnh báo nếu vượt ngưỡng."""
 
     now = datetime.now(timezone.utc).isoformat()
+
     severity = severity.upper()
     alert_threshold = alert_threshold.upper()
 
     with closing(get_connection(db_path)) as conn, conn:
+
         conn.execute("""
             INSERT INTO findings (
-                scan_id, url, rule_id, severity, evidence, recommendation, created_at
+                scan_id,
+                url,
+                rule_id,
+                severity,
+                evidence,
+                recommendation,
+                created_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
+
             ON CONFLICT(scan_id, url, rule_id) DO UPDATE SET
-                recommendation = COALESCE(findings.recommendation, excluded.recommendation)
+                recommendation = COALESCE(
+                    findings.recommendation,
+                    excluded.recommendation
+                )
         """, (
-            scan_id, url, rule_id, severity, evidence, recommendation, now
+            scan_id,
+            url,
+            rule_id,
+            severity,
+            evidence,
+            recommendation,
+            now
         ))
 
         row = conn.execute("""
             SELECT finding_id, severity
             FROM findings
-            WHERE scan_id = ? AND url = ? AND rule_id = ?
-        """, (scan_id, url, rule_id)).fetchone()
+            WHERE scan_id = ?
+              AND url = ?
+              AND rule_id = ?
+        """, (
+            scan_id,
+            url,
+            rule_id
+        )).fetchone()
 
         if not row:
             return None
@@ -171,19 +275,31 @@ def record_finding_and_alert(
         if SEVERITY_MAP.get(severity, 0) >= SEVERITY_MAP.get(
             alert_threshold, 3
         ):
+
             cur = conn.execute("""
                 INSERT OR IGNORE INTO alerts (
-                    scan_id, finding_id, severity, status, updated_at
+                    scan_id,
+                    finding_id,
+                    severity,
+                    status,
+                    updated_at
                 )
                 VALUES (?, ?, ?, 'NEW', ?)
-            """, (scan_id, finding_id, severity, now))
+            """, (
+                scan_id,
+                finding_id,
+                severity,
+                now
+            ))
 
             if cur.rowcount > 0:
                 alert_id = cur.lastrowid
 
                 conn.execute("""
                     INSERT INTO audit_logs (
-                        alert_id, action, timestamp_utc
+                        alert_id,
+                        action,
+                        timestamp_utc
                     )
                     VALUES (?, ?, ?)
                 """, (
@@ -195,13 +311,21 @@ def record_finding_and_alert(
         return finding_id
 
 
+# =========================================================
+# 5. SCAN JOB QUEUE
+# =========================================================
+
 def create_scan_job(db_path, targets, allowed_hosts):
     """Tạo một yêu cầu quét mới."""
+
+    if not targets:
+        raise ValueError("Danh sách targets không được rỗng.")
 
     scan_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
     with closing(get_connection(db_path)) as conn, conn:
+
         conn.execute("""
             INSERT INTO scan_jobs (
                 scan_id,
@@ -230,26 +354,37 @@ def get_pending_scan_job(db_path, scan_id=None):
     now = datetime.now(timezone.utc).isoformat()
 
     with closing(get_connection(db_path)) as conn, conn:
+
         conn.execute("BEGIN IMMEDIATE")
 
         job = conn.execute("""
             SELECT *
             FROM scan_jobs
-            WHERE status = 'PENDING' AND (? IS NULL OR scan_id = ?)
+            WHERE status = 'PENDING'
+              AND (? IS NULL OR scan_id = ?)
             ORDER BY created_at ASC
             LIMIT 1
-        """, (scan_id, scan_id)).fetchone()
+        """, (
+            scan_id,
+            scan_id
+        )).fetchone()
 
         if not job:
             return None
 
-        conn.execute("""
+        cursor = conn.execute("""
             UPDATE scan_jobs
             SET status = 'RUNNING',
                 started_at = ?
             WHERE scan_id = ?
               AND status = 'PENDING'
-        """, (now, job["scan_id"]))
+        """, (
+            now,
+            job["scan_id"]
+        ))
+
+        if cursor.rowcount != 1:
+            return None
 
         return {
             "scan_id": job["scan_id"],
@@ -265,38 +400,58 @@ def update_scan_status(db_path, scan_id, status, error=None):
     now = datetime.now(timezone.utc).isoformat()
 
     with closing(get_connection(db_path)) as conn, conn:
+
         if status in ("COMPLETED", "FAILED", "PARTIAL"):
+
             conn.execute("""
                 UPDATE scan_jobs
                 SET status = ?,
                     error = ?,
                     finished_at = ?
                 WHERE scan_id = ?
-            """, (status, error, now, scan_id))
+            """, (
+                status,
+                error,
+                now,
+                scan_id
+            ))
+
         else:
+
             conn.execute("""
                 UPDATE scan_jobs
                 SET status = ?,
                     error = ?
                 WHERE scan_id = ?
-            """, (status, error, scan_id))
+            """, (
+                status,
+                error,
+                scan_id
+            ))
 
 
 def update_scan_progress(db_path, scan_id, completed, total):
     """Cập nhật tiến độ quét."""
 
     with closing(get_connection(db_path)) as conn, conn:
+
         conn.execute("""
             UPDATE scan_jobs
             SET completed = ?,
                 total = ?
             WHERE scan_id = ?
-        """, (completed, total, scan_id))
+        """, (
+            completed,
+            total,
+            scan_id
+        ))
+
 
 def recover_stuck_jobs(db_path):
-    """Đưa các job RUNNING bị bỏ dở về PENDING khi khởi động lại Worker."""
+    """Khôi phục job RUNNING bị bỏ dở khi Worker khởi động lại."""
 
     with closing(get_connection(db_path)) as conn, conn:
+
         cur = conn.execute("""
             UPDATE scan_jobs
             SET status = 'PENDING',
@@ -307,3 +462,183 @@ def recover_stuck_jobs(db_path):
         """)
 
         return cur.rowcount
+
+
+# =========================================================
+# 6. SCHEDULED SCAN
+# =========================================================
+
+def create_scheduled_scan(
+    db_path,
+    name,
+    targets,
+    allowed_hosts,
+    interval_seconds
+):
+    """Tạo cấu hình lịch quét định kỳ."""
+
+    if interval_seconds <= 0:
+        raise ValueError("interval_seconds phải lớn hơn 0.")
+
+    if not targets:
+        raise ValueError("Danh sách targets không được rỗng.")
+
+    now = datetime.now(timezone.utc)
+
+    next_run = now + timedelta(
+        seconds=interval_seconds
+    )
+
+    schedule_id = str(uuid4())
+
+    with closing(get_connection(db_path)) as conn, conn:
+
+        conn.execute("""
+            INSERT INTO scheduled_scans (
+                schedule_id,
+                name,
+                targets,
+                allowed_hosts,
+                interval_seconds,
+                next_run_at,
+                enabled,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+        """, (
+            schedule_id,
+            name,
+            json.dumps(targets),
+            json.dumps(allowed_hosts),
+            interval_seconds,
+            next_run.isoformat(timespec="seconds"),
+            now.isoformat(timespec="seconds")
+        ))
+
+    return schedule_id
+
+
+def create_due_scheduled_jobs(db_path):
+    """
+    Tạo Scan Job cho các lịch đã đến hạn.
+
+    UNIQUE(schedule_id, scheduled_for) bảo đảm
+    mỗi lịch chỉ tạo một job cho một mốc thời gian.
+    """
+
+    now = datetime.now(timezone.utc)
+    now_text = now.isoformat(timespec="seconds")
+
+    created_jobs = []
+
+    with closing(get_connection(db_path)) as conn, conn:
+
+        # Khóa ghi để tránh hai Scheduler xử lý cùng lúc.
+        conn.execute("BEGIN IMMEDIATE")
+
+        schedules = conn.execute("""
+            SELECT *
+            FROM scheduled_scans
+            WHERE enabled = 1
+              AND next_run_at <= ?
+            ORDER BY next_run_at ASC
+        """, (now_text,)).fetchall()
+
+        for schedule in schedules:
+
+            scheduled_for = schedule["next_run_at"]
+            scan_id = str(uuid4())
+
+            # Đăng ký mốc lịch trước.
+            cursor = conn.execute("""
+                INSERT OR IGNORE INTO scheduled_scan_runs (
+                    schedule_id,
+                    scheduled_for,
+                    scan_id,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?)
+            """, (
+                schedule["schedule_id"],
+                scheduled_for,
+                scan_id,
+                now_text
+            ))
+
+            if cursor.rowcount > 0:
+
+                targets = json.loads(schedule["targets"])
+                allowed_hosts = json.loads(
+                    schedule["allowed_hosts"]
+                )
+
+                # Tạo Scan Job trong cùng transaction.
+                conn.execute("""
+                    INSERT INTO scan_jobs (
+                        scan_id,
+                        targets,
+                        allowed_hosts,
+                        status,
+                        total,
+                        completed,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, 'PENDING', ?, 0, ?)
+                """, (
+                    scan_id,
+                    json.dumps(targets),
+                    json.dumps(allowed_hosts),
+                    len(targets),
+                    now_text
+                ))
+
+                created_jobs.append(scan_id)
+
+            # Tính lần chạy tiếp theo dựa trên mốc cũ.
+            previous_run = datetime.fromisoformat(
+                scheduled_for
+            )
+
+            next_run = previous_run + timedelta(
+                seconds=schedule["interval_seconds"]
+            )
+
+            conn.execute("""
+                UPDATE scheduled_scans
+                SET next_run_at = ?
+                WHERE schedule_id = ?
+            """, (
+                next_run.isoformat(timespec="seconds"),
+                schedule["schedule_id"]
+            ))
+
+    return created_jobs
+
+
+def get_scheduled_scans(db_path):
+    """Lấy danh sách lịch quét."""
+
+    with closing(get_connection(db_path)) as conn:
+
+        return conn.execute("""
+            SELECT *
+            FROM scheduled_scans
+            ORDER BY created_at DESC
+        """).fetchall()
+
+
+def set_scheduled_scan_status(db_path, schedule_id, enabled):
+    """Bật hoặc tắt một lịch quét."""
+
+    with closing(get_connection(db_path)) as conn, conn:
+
+        cursor = conn.execute("""
+            UPDATE scheduled_scans
+            SET enabled = ?
+            WHERE schedule_id = ?
+        """, (
+            1 if enabled else 0,
+            schedule_id
+        ))
+
+        return cursor.rowcount
