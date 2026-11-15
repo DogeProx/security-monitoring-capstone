@@ -73,7 +73,7 @@ class ScannerEdgeCaseTests(unittest.TestCase):
         cls.thread.start()
 
         cls.base_url = f"http://127.0.0.1:{cls.port}"
-        cls.allowed_hosts = ["127.0.0.1"]
+        cls.allowed_hosts = [cls.base_url]
 
     @classmethod
     def tearDownClass(cls):
@@ -99,6 +99,7 @@ class ScannerEdgeCaseTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(len(result["cookies"]), 1)
+        self.assertNotIn("Set-Cookie", result["headers"])
 
         cookie = result["cookies"][0]
 

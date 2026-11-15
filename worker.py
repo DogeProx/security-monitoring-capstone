@@ -1,10 +1,11 @@
 import time
+from pathlib import Path
+
 from scanner import run_scan
 from detection_rules.rules import analyze_response
 
 from storage.db import (
     init_db,
-    create_scan_job,
     get_pending_scan_job,
     update_scan_status,
     update_scan_progress,
@@ -13,16 +14,17 @@ from storage.db import (
     recover_stuck_jobs
 )
 
-DB_PATH = "security_monitoring.db"
+DB_PATH = Path(__file__).with_name("security_monitoring.db")
 
 
-def process_one_job():
+def process_one_job(scan_id=None, *, db_path=None):
     """Lấy và xử lý một yêu cầu quét từ hàng đợi."""
 
-    init_db(DB_PATH)
+    db_path = DB_PATH if db_path is None else db_path
+    init_db(db_path)
 
     # 1. Lấy job đang chờ
-    job = get_pending_scan_job(DB_PATH)
+    job = get_pending_scan_job(db_path, scan_id)
 
     if not job:
         print("No pending scan job.")
@@ -33,16 +35,15 @@ def process_one_job():
     print("Processing scan:", scan_id)
 
     # 2. Callback cập nhật tiến độ
-    def progress_callback(completed, total, result):
-        update_scan_progress(
-            DB_PATH,
-            scan_id,
-            completed,
-            total
-        )
+    successful = 0
+
+    def progress_callback(attempted, total, result):
+        nonlocal successful
+        successful += result["status"] == "completed"
+        update_scan_progress(db_path, scan_id, successful, total)
 
         print(
-            f"Progress: {completed}/{total} - "
+            f"Progress: {attempted}/{total} - "
             f"{result['url']} - {result['status']}"
         )
 
@@ -56,7 +57,7 @@ def process_one_job():
         )
 
         # 4. Lưu báo cáo quét
-        save_scan_report(DB_PATH, report)
+        save_scan_report(db_path, report)
 
         # 5. Phân tích và lưu findings
         for response in report["results"]:
@@ -68,17 +69,18 @@ def process_one_job():
 
             for finding in findings:
                 record_finding_and_alert(
-                    db_path=DB_PATH,
+                    db_path=db_path,
                     scan_id=scan_id,
                     url=response["url"],
                     rule_id=finding["rule_id"],
                     severity=finding["severity"],
-                    evidence=finding["evidence"]
+                    evidence=finding["evidence"],
+                    recommendation=finding["remediation"],
                 )
 
         # 6. Cập nhật trạng thái job
         update_scan_status(
-            DB_PATH,
+            db_path,
             scan_id,
             report["status"].upper()
         )
@@ -90,7 +92,7 @@ def process_one_job():
 
     except Exception as error:
         update_scan_status(
-            DB_PATH,
+            db_path,
             scan_id,
             "FAILED",
             str(error)
