@@ -125,6 +125,10 @@ def init_db(db_path: str):
             );
         """)
 
+        # The schema script may commit before this migration. Acquire a write
+        # lock so concurrent startup cannot run the ALTER twice.
+        conn.execute("BEGIN IMMEDIATE")
+
         columns = {
             row["name"]
             for row in conn.execute(
