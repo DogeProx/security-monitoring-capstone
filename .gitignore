@@ -17,3 +17,5 @@ __pycache__/
 .idea/
 *.db
 reports/
+report.csv
+report.html
