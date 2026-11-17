@@ -1,11 +1,23 @@
 import sqlite3
 import csv
 import html
+import argparse
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlsplit
 
-# Đường dẫn DB chuẩn khớp với integration.py và worker.py
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "security_monitoring.db"
+# Đồng bộ đường dẫn DB chuẩn với integration.py (dự phòng về security_monitoring.db)
+try:
+    from integration import DB_PATH as DEFAULT_DB_PATH
+except Exception:
+    DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "security_monitoring.db"
+
+# Hướng dẫn khắc phục mặc định theo mã quy tắc nếu bản ghi trong DB để trống
+DEFAULT_REMEDIATIONS = {
+    "SEC-HDR-CSP": "Thêm header Content-Security-Policy phù hợp (ví dụ: default-src 'self') cho phản hồi HTML.",
+    "SEC-HDR-XCTO": "Thêm header X-Content-Type-Options: nosniff để ngăn trình duyệt tự đoán kiểu MIME.",
+    "SEC-CKI-HTTPONLY": "Bổ sung cờ HttpOnly cho cookie phiên nhạy cảm để chặn truy cập từ JavaScript.",
+}
 
 
 class SQLiteReportExporter:
@@ -15,7 +27,7 @@ class SQLiteReportExporter:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def fetch_findings_with_alerts(self, scan_id=None):
-        """Truy vấn phát hiện (findings) kèm trạng thái cảnh báo (alerts) từ SQLite."""
+        """Truy vấn phát hiện (findings) kèm mục tiêu quét, cách khắc phục và trạng thái cảnh báo."""
         if not self.db_path.exists():
             raise FileNotFoundError(f"Không tìm thấy cơ sở dữ liệu tại: {self.db_path}")
 
@@ -23,18 +35,41 @@ class SQLiteReportExporter:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Đoạn truy vấn kết nối bảng findings và alerts
-        query = """
+        # Kiểm tra động cấu trúc bảng findings và scans để tương thích mọi bản cập nhật DB
+        finding_cols = {row[1] for row in cursor.execute("PRAGMA table_info(findings)").fetchall()}
+        scan_cols = {row[1] for row in cursor.execute("PRAGMA table_info(scans)").fetchall()}
+
+        if "remediation" in finding_cols:
+            remediation_expr = "f.remediation AS remediation"
+        elif "recommendation" in finding_cols:
+            remediation_expr = "f.recommendation AS remediation"
+        else:
+            remediation_expr = "'' AS remediation"
+
+        join_scans = ""
+        if "target" in scan_cols:
+            target_expr = "s.target AS target"
+            join_scans = "LEFT JOIN scans s ON f.scan_id = s.scan_id"
+        elif "targets" in scan_cols:
+            target_expr = "s.targets AS target"
+            join_scans = "LEFT JOIN scans s ON f.scan_id = s.scan_id"
+        else:
+            target_expr = "'' AS target"
+
+        query = f"""
             SELECT 
                 f.finding_id,
                 f.scan_id,
+                f.created_at,
+                {target_expr},
                 f.url,
                 f.rule_id,
                 f.severity,
                 f.evidence,
-                f.created_at,
+                {remediation_expr},
                 COALESCE(a.status, 'NO_ALERT') AS alert_status
             FROM findings f
+            {join_scans}
             LEFT JOIN alerts a ON f.finding_id = a.finding_id
         """
         params = ()
@@ -44,7 +79,21 @@ class SQLiteReportExporter:
 
         query += " ORDER BY f.finding_id ASC"
         cursor.execute(query, params)
-        rows = [dict(row) for row in cursor.fetchall()]
+
+        rows = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            # Điền mục tiêu từ origin của URL nếu bảng scans không lưu chuỗi target đơn
+            if not item.get("target") and item.get("url"):
+                parsed = urlsplit(str(item["url"]))
+                item["target"] = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else item["url"]
+            # Điền cách khắc phục mặc định nếu trong DB chưa có
+            if not item.get("remediation"):
+                item["remediation"] = DEFAULT_REMEDIATIONS.get(
+                    item.get("rule_id"), "Rà soát và bổ sung cấu hình bảo mật theo khuyến nghị OWASP."
+                )
+            rows.append(item)
+
         conn.close()
         return rows
 
@@ -56,8 +105,8 @@ class SQLiteReportExporter:
         file_path = self.output_dir / f"security_report_{tag}_{timestamp}.csv"
 
         headers = [
-            "finding_id", "scan_id", "url", "rule_id",
-            "severity", "evidence", "alert_status", "created_at"
+            "finding_id", "scan_id", "created_at", "target", "url",
+            "rule_id", "severity", "evidence", "remediation", "alert_status"
         ]
 
         with open(file_path, mode="w", newline="", encoding="utf-8-sig") as f:
@@ -80,12 +129,14 @@ class SQLiteReportExporter:
             <tr>
                 <td>{item['finding_id']}</td>
                 <td>{html.escape(str(item['scan_id']))}</td>
+                <td>{html.escape(str(item['created_at']))}</td>
+                <td>{html.escape(str(item['target']))}</td>
                 <td>{html.escape(str(item['url']))}</td>
                 <td><strong>{html.escape(str(item['rule_id']))}</strong></td>
                 <td>{html.escape(str(item['severity']))}</td>
                 <td><code>{html.escape(str(item['evidence'] or ''))}</code></td>
+                <td>{html.escape(str(item['remediation']))}</td>
                 <td>{html.escape(str(item['alert_status']))}</td>
-                <td>{html.escape(str(item['created_at']))}</td>
             </tr>
             """
 
@@ -96,8 +147,8 @@ class SQLiteReportExporter:
     <title>Báo cáo Giám sát Bảo mật Web</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        table {{ border-collapse: collapse; width: 100%; }}
-        th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; }}
+        table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
+        th, td {{ border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }}
         th {{ background-color: #2c3e50; color: white; }}
         tr:nth-child(even) {{ background-color: #f9f9f9; }}
     </style>
@@ -110,16 +161,18 @@ class SQLiteReportExporter:
             <tr>
                 <th>ID</th>
                 <th>Scan ID</th>
+                <th>Thời gian</th>
+                <th>Mục tiêu</th>
                 <th>URL</th>
                 <th>Mã quy tắc</th>
                 <th>Mức độ</th>
                 <th>Bằng chứng</th>
+                <th>Cách khắc phục</th>
                 <th>Cảnh báo</th>
-                <th>Thời gian</th>
             </tr>
         </thead>
         <tbody>
-            {rows_html if rows_html else '<tr><td colspan="8">Không có phát hiện lỗi nào.</td></tr>'}
+            {rows_html if rows_html else '<tr><td colspan="10">Không có phát hiện lỗi nào.</td></tr>'}
         </tbody>
     </table>
 </body>
@@ -129,3 +182,16 @@ class SQLiteReportExporter:
             f.write(html_content)
 
         return str(file_path)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Xuất báo cáo bảo mật CSV và HTML từ SQLite.")
+    parser.add_argument("--db", default=str(DEFAULT_DB_PATH), help="Đường dẫn tới tệp SQLite")
+    parser.add_argument("--scan-id", default=None, help="Lọc theo Scan ID cụ thể (bỏ trống để xuất tất cả)")
+    args = parser.parse_args()
+
+    exporter = SQLiteReportExporter(db_path=args.db)
+    csv_out = exporter.export_csv(scan_id=args.scan_id)
+    html_out = exporter.export_html(scan_id=args.scan_id)
+    print(f"Đã xuất báo cáo CSV:  {csv_out}")
+    print(f"Đã xuất báo cáo HTML: {html_out}")

@@ -41,7 +41,7 @@ def test_week4_edge_cases():
     c_multi = count_findings_for_url(scan_id, f"{DEMO_ORIGIN}/vuln-multi")
 
     print(f"[1/5] Trang sạch (/secure):          {c_secure} phát hiện (Kỳ vọng: 0)")
-    print(f"[2/5] API JSON (/api/data):          {c_api} phát hiện (Kỳ vọng: 0 - Chống báo sai)")
+    print(f"[2/5] API JSON (/api/data):          {c_api} phát hiện (Kỳ vọng: 1 - Không báo sai CSP, chỉ bắt thiếu XCTO)")    
     print(f"[3/5] Không cookie (/public-page):   {c_public} phát hiện (Kỳ vọng: 0)")
     print(f"[4/5] Nhiều lỗi (/vuln-multi):       {c_multi} phát hiện (Kỳ vọng: >= 2)")
 
