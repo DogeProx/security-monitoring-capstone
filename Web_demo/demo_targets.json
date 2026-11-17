@@ -1,0 +1,29 @@
+{
+  "demo_suite_name": "Bo du lieu kiem thu Web Demo chuan",
+  "targets": [
+    {
+      "url": "http://127.0.0.1:5000/secure",
+      "description": "Trang sach cau hinh day du Security Headers"
+    },
+    {
+      "url": "http://127.0.0.1:5000/vuln-headers",
+      "description": "Thieu CSP va X-Content-Type-Options"
+    },
+    {
+      "url": "http://127.0.0.1:5000/vuln-cookie",
+      "description": "Cookie phien thieu co HttpOnly"
+    },
+    {
+      "url": "http://127.0.0.1:5000/vuln-multi",
+      "description": "Nhieu phat hien dong thoi (Headers + Cookie + Server Banner)"
+    },
+    {
+      "url": "http://127.0.0.1:5000/api/data",
+      "description": "API JSON - Kiem tra chong bao sai (False Positive)"
+    },
+    {
+      "url": "http://127.0.0.1:5000/public-page",
+      "description": "Trang khong dat cookie phien"
+    }
+  ]
+}

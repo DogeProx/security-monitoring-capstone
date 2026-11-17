@@ -15,5 +15,7 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+*.db
+reports/
 report.csv
 report.html
