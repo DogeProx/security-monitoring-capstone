@@ -17,7 +17,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="container">
         <header>
             <h1>🛡️ Web Demo An Toàn Thông Tin</h1>
-            <p class="subtitle">Môi trường thử nghiệm bộ quét cấu hình bảo mật Web (Tuần 1 - Tuần 4)</p>
+            <p class="subtitle">Môi trường thử nghiệm bộ quét cấu hình bảo mật Web (Tuần 1 - Tuần 5)</p>
         </header>
         
         <nav>
@@ -28,6 +28,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <a href="/vuln-multi" class="{active_vuln_multi}">/vuln-multi</a>
             <a href="/public-page" class="{active_public_page}">/public-page</a>
             <a href="/api/data">/api/data</a>
+            <a href="/error">/error</a>
         </nav>
 
         <main>
@@ -206,11 +207,26 @@ class DemoHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(payload)
 
+        elif self.path == '/error':
+            content = """
+            <div class="card">
+                <span class="badge badge-danger">✕ HTTP 500 Internal Server Error</span>
+                <h2>Trang Giả Lập Lỗi Máy Chủ (Tuần 5)</h2>
+                <p>Endpoint này cố tình trả về mã trạng thái <strong>HTTP 500</strong> để kiểm thử khả năng xử lý trang lỗi của bộ quét.</p>
+            </div>
+            """
+            self.send_rendered_response(
+                title="Lỗi Máy Chủ (500)",
+                content=content,
+                active_page="error",
+                status=500
+            )
+
         else:
             content = """
             <div class="card">
                 <h2>Chào mừng đến với Web Demo</h2>
-                <p>Đây là ứng dụng web thử nghiệm phục vụ cho bài tập đồ án. Nhấn vào các đường dẫn trên thanh menu để truy cập các trang tình huống kiểm thử bảo mật (Tuần 1 - Tuần 4).</p>
+                <p>Đây là ứng dụng web thử nghiệm phục vụ cho bài tập đồ án. Nhấn vào các đường dẫn trên thanh menu để truy cập các trang tình huống kiểm thử bảo mật (Tuần 1 - Tuần 5).</p>
             </div>
             """
             self.send_rendered_response(
@@ -220,6 +236,17 @@ class DemoHandler(BaseHTTPRequestHandler):
             )
 
 
+if __name__ == '__main__':
+    server = HTTPServer(('127.0.0.1', 5000), DemoHandler)
+    print("--------------------------------------------------")
+    print("  🚀 Web Demo ATTT đã sẵn sàng (7 Endpoints)!")
+    print("  🌐 Truy cập giao diện tại: http://127.0.0.1:5000")
+    print("--------------------------------------------------")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n🛑 Đã dừng Web Demo.")
+        server.server_close()
 if __name__ == "__main__":
     with HTTPServer(("127.0.0.1", 5000), DemoHandler) as server:
         print("Web demo: http://127.0.0.1:5000")
