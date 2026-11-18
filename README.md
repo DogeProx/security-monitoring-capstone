@@ -79,6 +79,8 @@ Giữ web demo hoạt động và chạy `python worker.py`. Trong dashboard, ch
 python -X utf8 worker.py --disable-rule SEC-HDR-CSP
 ```
 
+Xem [kết quả kiểm thử dashboard và kịch bản bàn giao tuần 6](TUAN_5_6_NGHIEM_THU_VA_DEMO.md).
+
 ### Kiểm thử cục bộ
 
 ```text

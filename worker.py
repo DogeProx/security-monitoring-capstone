@@ -80,11 +80,11 @@ def process_one_job(scan_id=None, *, db_path=None, rules_config=None):
                 )
 
         # 6. Cập nhật trạng thái job
-        update_scan_status(
-            db_path,
-            scan_id,
-            report["status"].upper()
+        first_error = next(
+            (result["error"] for result in report["results"] if result.get("error")),
+            None,
         )
+        update_scan_status(db_path, scan_id, report["status"].upper(), first_error)
 
         print("Scan finished:", report["status"])
         print("Summary:", report["summary"])
