@@ -28,6 +28,8 @@ Nhóm demo trên ứng dụng web cục bộ do nhóm kiểm soát. Bộ quét d
 
 Xem [bản phân công 6 tuần cho 5 thành viên](PHAN_CONG.md) và [thiết kế dashboard tuần 1](TUAN_1_THIET_KE_DASHBOARD.md).
 
+Xem [tiến độ hiện tại của từng thành viên](PROGRESS.md).
+
 ## Chạy demo tích hợp
 
 Chạy các lệnh dưới đây từ thư mục gốc của repo với Python 3.11 trở lên.
