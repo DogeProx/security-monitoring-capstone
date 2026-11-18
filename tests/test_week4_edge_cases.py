@@ -1,58 +1,104 @@
-import sys
-import sqlite3
+from contextlib import closing, contextmanager
+import csv
+from datetime import datetime, timedelta, timezone
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+import sqlite3
+from tempfile import TemporaryDirectory
+from threading import Thread
+from unittest import TestCase
 
-# Thêm thư mục gốc dự án vào sys.path
-ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT_DIR))
-
-from integration import scan_and_analyze, DB_PATH, DEMO_ORIGIN
-
-
-def count_findings_for_url(scan_id: str, url: str) -> int:
-    """Đếm số lượng phát hiện (findings) ghi nhận được cho một URL cụ thể."""
-    conn = sqlite3.connect(DB_PATH)
-    count = conn.execute(
-        "SELECT COUNT(*) FROM findings WHERE scan_id = ? AND url = ?",
-        (scan_id, url),
-    ).fetchone()[0]
-    conn.close()
-    return count
+from Reporter.sqlite_exporter import SQLiteReportExporter
+from Web_demo.app import DemoHandler
+from storage.db import (
+    create_due_scheduled_jobs,
+    create_scan_job,
+    create_scheduled_scan,
+    init_db,
+)
+from worker import process_one_job
 
 
-def test_week4_edge_cases():
-    print("=== [TUẦN 4] KIỂM THỬ TÌNH HUỐNG BIÊN & BỘ DỮ LIỆU DEMO ===")
-
-    # Nhóm 1: Kiểm thử các trang sạch, chống báo sai và trang nhiều lỗ hổng
-    edge_targets = [
-        f"{DEMO_ORIGIN}/secure",       # Trang sạch chuẩn
-        f"{DEMO_ORIGIN}/api/data",     # API JSON (không được báo sai thiếu CSP)
-        f"{DEMO_ORIGIN}/public-page",  # Trang không đặt cookie (không được báo lỗi cookie)
-        f"{DEMO_ORIGIN}/vuln-multi",   # Trang chứa nhiều lỗ hổng cùng lúc
-    ]
-
-    report = scan_and_analyze(edge_targets, [DEMO_ORIGIN])
-    assert report is not None, "Lỗi: Không chạy được lượt quét tình huống biên!"
-    scan_id = report["scan_id"]
-
-    c_secure = count_findings_for_url(scan_id, f"{DEMO_ORIGIN}/secure")
-    c_api = count_findings_for_url(scan_id, f"{DEMO_ORIGIN}/api/data")
-    c_public = count_findings_for_url(scan_id, f"{DEMO_ORIGIN}/public-page")
-    c_multi = count_findings_for_url(scan_id, f"{DEMO_ORIGIN}/vuln-multi")
-
-    print(f"[1/5] Trang sạch (/secure):          {c_secure} phát hiện (Kỳ vọng: 0)")
-    print(f"[2/5] API JSON (/api/data):          {c_api} phát hiện (Kỳ vọng: 1 - Không báo sai CSP, chỉ bắt thiếu XCTO)")    
-    print(f"[3/5] Không cookie (/public-page):   {c_public} phát hiện (Kỳ vọng: 0)")
-    print(f"[4/5] Nhiều lỗi (/vuln-multi):       {c_multi} phát hiện (Kỳ vọng: >= 2)")
-
-    # Nhóm 2: Thử nghiệm Web Demo không chạy (kết nối vào cổng 5999 không tồn tại)
-    offline_origin = "http://127.0.0.1:5999"
-    offline_report = scan_and_analyze([f"{offline_origin}/secure"], [offline_origin])
-    status = offline_report["status"] if offline_report else "handled_error"
-    print(f"[5/5] Ca Web Demo không chạy:        Trạng thái hệ thống = '{status}' (Không bị crash)")
-
-    print("=== HOÀN TẤT KIỂM THỬ TUẦN 4 ===")
+@contextmanager
+def demo_server():
+    with ThreadingHTTPServer(("127.0.0.1", 0), DemoHandler) as server:
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}"
+        finally:
+            server.shutdown()
+            thread.join()
 
 
-if __name__ == "__main__":
-    test_week4_edge_cases()
+class TestWeek4(TestCase):
+    def setUp(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.db = self.root / "demo.db"
+        init_db(self.db)
+
+    def run_pages(self, origin, paths, rules_config=None):
+        scan_id = create_scan_job(self.db, [origin + path for path in paths], [origin])
+        report = process_one_job(scan_id, db_path=self.db, rules_config=rules_config)
+        self.assertIsNotNone(report)
+        return report
+
+    def rules_for(self, report, url):
+        with closing(sqlite3.connect(self.db)) as conn:
+            rows = conn.execute(
+                "SELECT rule_id FROM findings WHERE scan_id = ? AND url = ?",
+                (report["scan_id"], url),
+            )
+            return {row[0] for row in rows}
+
+    def test_demo_edge_cases(self):
+        expected = {
+            "/secure": set(),
+            "/api/data": {"SEC-HDR-XCTO"},
+            "/public-page": set(),
+            "/vuln-multi": {"SEC-HDR-CSP", "SEC-HDR-XCTO", "SEC-CKI-HTTPONLY"},
+        }
+        with demo_server() as origin:
+            report = self.run_pages(origin, expected)
+        self.assertEqual(report["status"], "completed")
+        for path, rules in expected.items():
+            with self.subTest(path=path):
+                self.assertEqual(self.rules_for(report, origin + path), rules)
+
+    def test_offline_demo(self):
+        with demo_server() as origin:
+            pass
+        report = self.run_pages(origin, ["/secure"])
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["summary"]["failed"], 1)
+        self.assertEqual(self.rules_for(report, origin + "/secure"), set())
+
+    def test_rule_toggle_changes_persisted_findings(self):
+        with demo_server() as origin:
+            report = self.run_pages(origin, ["/vuln-multi"], {
+                "SEC-HDR-CSP": False,
+                "SEC-HDR-XCTO": True,
+                "SEC-CKI-HTTPONLY": True,
+            })
+        self.assertEqual(self.rules_for(report, origin + "/vuln-multi"),
+                         {"SEC-HDR-XCTO", "SEC-CKI-HTTPONLY"})
+
+    def test_scheduled_job_and_reporting_without_dashboard(self):
+        with demo_server() as origin:
+            create_scheduled_scan(self.db, "Local demo", [origin + "/vuln-multi"], [origin], 60)
+            due = datetime.now(timezone.utc) + timedelta(minutes=2)
+            jobs = create_due_scheduled_jobs(self.db, now=due)
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(create_due_scheduled_jobs(self.db, now=due), [])
+            report = process_one_job(jobs[0], db_path=self.db)
+        self.assertEqual(report["status"], "completed")
+
+        exporter = SQLiteReportExporter(db_path=self.db, output_dir=self.root)
+        with Path(exporter.export_csv(scan_id=jobs[0])).open(encoding="utf-8-sig", newline="") as stream:
+            self.assertEqual(len(list(csv.DictReader(stream))), 3)
+        html = Path(exporter.export_html(scan_id=jobs[0])).read_text(encoding="utf-8")
+        self.assertIn("SEC-CKI-HTTPONLY", html)
+        with closing(sqlite3.connect(self.db)) as conn:
+            self.assertEqual(conn.execute("SELECT count(*) FROM alerts").fetchone(), (1,))

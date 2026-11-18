@@ -1,3 +1,4 @@
+import argparse
 import time
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from storage.db import (
 DB_PATH = Path(__file__).with_name("security_monitoring.db")
 
 
-def process_one_job(scan_id=None, *, db_path=None):
+def process_one_job(scan_id=None, *, db_path=None, rules_config=None):
     """Lấy và xử lý một yêu cầu quét từ hàng đợi."""
 
     db_path = DB_PATH if db_path is None else db_path
@@ -65,7 +66,7 @@ def process_one_job(scan_id=None, *, db_path=None):
             if response["status"] != "completed":
                 continue
 
-            findings = analyze_response(response)
+            findings = analyze_response(response, config=rules_config)
 
             for finding in findings:
                 record_finding_and_alert(
@@ -79,11 +80,11 @@ def process_one_job(scan_id=None, *, db_path=None):
                 )
 
         # 6. Cập nhật trạng thái job
-        update_scan_status(
-            db_path,
-            scan_id,
-            report["status"].upper()
+        first_error = next(
+            (result["error"] for result in report["results"] if result.get("error")),
+            None,
         )
+        update_scan_status(db_path, scan_id, report["status"].upper(), first_error)
 
         print("Scan finished:", report["status"])
         print("Summary:", report["summary"])
@@ -102,7 +103,7 @@ def process_one_job(scan_id=None, *, db_path=None):
         return None
 
 
-def run_worker():
+def run_worker(rules_config=None):
     """Chạy Worker liên tục và khôi phục job bị bỏ dở."""
 
     init_db(DB_PATH)
@@ -114,7 +115,7 @@ def run_worker():
 
     try:
         while True:
-            result = process_one_job()
+            result = process_one_job(rules_config=rules_config)
 
             if result is None:
                 time.sleep(3)
@@ -124,4 +125,8 @@ def run_worker():
 
 
 if __name__ == "__main__":
-    run_worker()
+    rule_ids = ("SEC-HDR-CSP", "SEC-HDR-XCTO", "SEC-CKI-HTTPONLY")
+    parser = argparse.ArgumentParser(description="Xử lý lượt kiểm tra cấu hình web.")
+    parser.add_argument("--disable-rule", action="append", choices=rule_ids, default=[])
+    args = parser.parse_args()
+    run_worker({rule_id: rule_id not in args.disable_rule for rule_id in rule_ids})

@@ -28,6 +28,8 @@ Nhóm demo trên ứng dụng web cục bộ do nhóm kiểm soát. Bộ quét d
 
 Xem [bản phân công 6 tuần cho 5 thành viên](PHAN_CONG.md) và [thiết kế dashboard tuần 1](TUAN_1_THIET_KE_DASHBOARD.md).
 
+Xem [tiến độ hiện tại của từng thành viên](PROGRESS.md).
+
 ## Chạy demo tích hợp
 
 Chạy các lệnh dưới đây từ thư mục gốc của repo với Python 3.11 trở lên.
@@ -41,7 +43,7 @@ Chạy các lệnh dưới đây từ thư mục gốc của repo với Python 3
 2. Mở terminal thứ nhất và giữ web thử nghiệm chạy tại `http://127.0.0.1:5000`.
 
    ```text
-   python Web_demo/app.py
+   python -X utf8 Web_demo/app.py
    ```
 
 3. Mở terminal thứ hai, quét ba trang demo rồi mở dashboard tại `http://127.0.0.1:8501`.
@@ -71,10 +73,21 @@ Giữ web demo hoạt động và chạy `python worker.py`. Trong dashboard, ch
 
 Ở tab **Cảnh báo**, mở bản ghi để xem phát hiện, bằng chứng, cách khắc phục và lịch sử. Chọn **Xác nhận đã xem** hoặc **Đánh dấu đã xử lý**. Dashboard ghi mỗi lần chuyển trạng thái vào lịch sử SQLite.
 
+### Cấu hình quy tắc trên worker
+
+Để tắt một quy tắc cho các lượt quét do worker xử lý, khởi động worker với mã quy tắc tương ứng. Có thể lặp lại cờ `--disable-rule`. Khi chạy worker với cấu hình mặc định, cả ba quy tắc đều bật.
+
+```text
+python -X utf8 worker.py --disable-rule SEC-HDR-CSP
+```
+
+Xem [kết quả kiểm thử dashboard và kịch bản bàn giao tuần 6](TUAN_5_6_NGHIEM_THU_VA_DEMO.md).
+
 ### Kiểm thử cục bộ
 
 ```text
 python -m unittest scanner.test_client_edge_cases -v
 python detection_rules/test_rules.py -v
 python -m unittest discover -s tests -v
+python -m unittest test_scheduler -v
 ```

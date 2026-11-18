@@ -689,3 +689,36 @@ def set_scheduled_scan_status(
         ))
 
         return cursor.rowcount > 0
+# ============================================================
+# DATA QUERIES (TUẦN 3 & TUẦN 4)
+# ============================================================
+
+def get_all_scans(db_path: str):
+    """Lấy danh sách các lượt quét để hiển thị lên Dashboard."""
+    with closing(get_connection(db_path)) as conn:
+        cursor = conn.execute("SELECT * FROM scans ORDER BY started_at DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+def get_alerts_with_details(db_path: str):
+    """Lấy danh sách cảnh báo kèm theo chi tiết lỗi (để vẽ bảng)."""
+    with closing(get_connection(db_path)) as conn:
+        query = """
+            SELECT a.alert_id, a.severity, a.status, a.updated_at,
+                   f.url, f.rule_id, f.evidence
+            FROM alerts a
+            JOIN findings f ON a.finding_id = f.finding_id
+            ORDER BY a.updated_at DESC
+        """
+        return [dict(row) for row in conn.execute(query).fetchall()]
+
+def get_report_data(db_path: str):
+    """Lấy dữ liệu tổng hợp cho xuất báo cáo CSV/HTML."""
+    with closing(get_connection(db_path)) as conn:
+        query = """
+            SELECT s.started_at, s.scan_id, f.url, f.rule_id, f.severity, f.evidence, a.status as alert_status
+            FROM findings f
+            JOIN scans s ON f.scan_id = s.scan_id
+            LEFT JOIN alerts a ON f.finding_id = a.finding_id
+            ORDER BY s.started_at DESC
+        """
+        return [dict(row) for row in conn.execute(query).fetchall()]

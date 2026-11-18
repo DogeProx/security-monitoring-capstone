@@ -57,7 +57,7 @@ class SQLiteReportExporter:
             target_expr = "'' AS target"
 
         query = f"""
-            SELECT 
+            SELECT
                 f.finding_id,
                 f.scan_id,
                 f.created_at,
