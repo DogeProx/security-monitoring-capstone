@@ -1,6 +1,6 @@
 import unittest
-from rules import analyze_response
-from integration import process_scan_report
+from detection_rules.rules import analyze_response
+from detection_rules.integration import process_scan_report
 
 class TestDetectionRulesAdvanced(unittest.TestCase):
     def setUp(self):

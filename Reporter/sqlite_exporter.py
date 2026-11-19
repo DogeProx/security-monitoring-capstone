@@ -6,11 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from urllib.parse import urlsplit
 
-# Đồng bộ đường dẫn DB chuẩn với integration.py (dự phòng về security_monitoring.db)
-try:
-    from integration import DB_PATH as DEFAULT_DB_PATH
-except Exception:
-    DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "security_monitoring.db"
+DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "security_monitoring.db"
 
 # Hướng dẫn khắc phục mặc định theo mã quy tắc nếu bản ghi trong DB để trống
 DEFAULT_REMEDIATIONS = {

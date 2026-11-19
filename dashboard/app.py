@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from integration import DEMO_ORIGIN, DEMO_TARGETS
+from Web_demo.config import DEMO_ORIGIN, DEMO_TARGETS
 from storage.db import create_scan_job, init_db, transition_alert
 
 

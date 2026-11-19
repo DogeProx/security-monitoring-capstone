@@ -2,7 +2,7 @@ from tests.test_week4_edge_cases import demo_server
 from Reporter.sqlite_exporter import SQLiteReportExporter
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest import FunctionTestCase
+import unittest
 from storage.db import create_scan_job, init_db
 from worker import process_one_job
 
@@ -23,7 +23,7 @@ def test_week3_full_pipeline():
 
 
 def load_tests(loader, standard_tests, pattern):
-    standard_tests.addTest(FunctionTestCase(test_week3_full_pipeline))
+    standard_tests.addTest(unittest.FunctionTestCase(test_week3_full_pipeline))
     return standard_tests
 
 

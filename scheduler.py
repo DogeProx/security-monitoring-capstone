@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from scanner.scope import normalize_host
+from Web_demo.config import DEMO_TARGETS
 from storage.db import (
     init_db,
     create_scheduled_scan,
@@ -28,13 +29,6 @@ from storage.db import (
 DB_PATH = Path(__file__).with_name("security_monitoring.db")
 POLL_INTERVAL_SECONDS = 3
 
-DEMO_ORIGIN = "http://127.0.0.1:5000"
-
-DEMO_TARGETS = [
-    f"{DEMO_ORIGIN}/secure",
-    f"{DEMO_ORIGIN}/vuln-headers",
-    f"{DEMO_ORIGIN}/vuln-cookie",
-]
 
 
 def add_schedule(name, targets, interval_seconds):

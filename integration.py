@@ -3,16 +3,11 @@ import argparse
 from pathlib import Path
 
 from storage.db import create_scan_job, init_db
+from Web_demo.config import DEMO_ORIGIN, DEMO_TARGETS
 
 
 DB_PATH = Path(__file__).with_name("security_monitoring.db")
 
-DEMO_ORIGIN = "http://127.0.0.1:5000"
-DEMO_TARGETS = [
-    f"{DEMO_ORIGIN}/secure",
-    f"{DEMO_ORIGIN}/vuln-headers",
-    f"{DEMO_ORIGIN}/vuln-cookie",
-]
 
 
 def scan_and_analyze(targets, allowed_hosts):

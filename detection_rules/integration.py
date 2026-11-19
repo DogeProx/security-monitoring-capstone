@@ -1,4 +1,4 @@
-from rules import analyze_response
+from .rules import analyze_response
 
 def process_scan_report(scan_report, rules_config=None):
     """

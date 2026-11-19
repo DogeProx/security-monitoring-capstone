@@ -87,7 +87,7 @@ Xem [kết quả kiểm thử dashboard và kịch bản bàn giao tuần 6](TUA
 
 ```text
 python -m unittest scanner.test_client_edge_cases -v
-python detection_rules/test_rules.py -v
+python -m unittest detection_rules.test_rules -v
 python -m unittest discover -s tests -v
 python -m unittest test_scheduler -v
 ```

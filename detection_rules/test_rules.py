@@ -1,5 +1,5 @@
 import unittest
-from rules import analyze_response
+from detection_rules.rules import analyze_response
 
 class TestDetectionRules(unittest.TestCase):
     def setUp(self):
