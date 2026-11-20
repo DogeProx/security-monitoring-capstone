@@ -1,5 +1,5 @@
 import unittest
-from rules import analyze_response
+from detection_rules.rules import analyze_response
 
 SEVERITY_LEVELS = {
     "Low": 1,

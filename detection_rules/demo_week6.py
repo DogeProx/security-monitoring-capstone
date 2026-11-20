@@ -1,5 +1,5 @@
-from integration import process_scan_report
-from test_rules_week5 import evaluate_alert_threshold
+from detection_rules.integration import process_scan_report
+from detection_rules.test_rules_week5 import evaluate_alert_threshold
 
 
 def run_comparison_demo():
