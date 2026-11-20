@@ -47,3 +47,26 @@ Nếu lượt quét còn **Đang chờ**, kiểm tra terminal worker và bấm *
 ### Bàn giao
 
 Trưởng nhóm ghi lại commit dùng để demo, mã lượt quét và kết quả từng bước. Khi chạy thử cùng nhóm từ bản cài mới, đối chiếu báo cáo với chính lượt quét đã trình bày trước khi xác nhận buổi bàn giao.
+
+---
+
+## Nghiệm thu tuần 5 và đối chiếu báo cáo tuần 6 · Web demo và Reporter
+
+**Phụ trách** · Vũ Đắc Lộc — Web demo, Báo cáo và Kiểm thử tích hợp
+
+**Phạm vi** · Các endpoint kiểm thử cục bộ, xuất CSV/HTML từ SQLite và tương thích Windows/Linux
+
+### Tuần 5 · Kết quả kiểm thử đa nền tảng và ca biên
+
+| Tình huống | Kết quả kiểm chứng |
+|---|---|
+| Bảy endpoint của web demo | Phản hồi đúng mã trạng thái và cấu hình mẫu trên `/secure`, `/vuln-headers`, `/vuln-cookie`, `/vuln-multi`, `/api/data`, `/public-page` và `/error`. |
+| Phản hồi API JSON (`/api/data`) | Bộ quy tắc bỏ qua kiểm tra CSP trên dữ liệu JSON, không tạo phát hiện sai. |
+| Cơ sở dữ liệu trống hoặc không có lỗi | Xuất CSV và HTML thành công với 0 dòng dữ liệu, không phát sinh ngoại lệ. |
+| Chèn mã HTML trong header/cookie | Toàn bộ cột bằng chứng trong `report.html` được thoát ký tự qua `html.escape`, không thực thi mã. |
+| Tương thích Windows và Linux (WSL) | Đạt toàn bộ kiểm thử hồi quy, tích hợp tuần 3, ca biên tuần 4 và giao diện dashboard trên cả hai môi trường. |
+
+Bộ xuất báo cáo (`Reporter/Export.py` và `Reporter/sqlite_exporter.py`) đã đồng bộ nhãn trạng thái cảnh báo tiếng Việt (`Mới`, `Đã xem`, `Đã xử lý`) với dashboard, bổ sung hướng dẫn khắc phục mặc định theo mã quy tắc và ghi tệp CSV theo bảng mã `utf-8-sig` để mở trực tiếp trên Excel không lỗi font.
+
+```text
+python -m unittest tests.test_demo_regressions tests.test_week3_integration tests.test_week4_edge_cases tests.test_dashboard -v
