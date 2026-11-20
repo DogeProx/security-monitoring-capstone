@@ -15,6 +15,13 @@ DEFAULT_REMEDIATIONS = {
     "SEC-CKI-HTTPONLY": "Bổ sung cờ HttpOnly cho cookie phiên nhạy cảm để chặn truy cập từ JavaScript.",
 }
 
+ALERT_STATUS_LABELS = {
+    "NEW": "Mới",
+    "ACKNOWLEDGED": "Đã xem",
+    "RESOLVED": "Đã xử lý",
+    "NO_ALERT": "Không cảnh báo",
+}
+
 
 class SQLiteReportExporter:
     def __init__(self, db_path=DEFAULT_DB_PATH, output_dir="reports"):
@@ -88,6 +95,8 @@ class SQLiteReportExporter:
                 item["remediation"] = DEFAULT_REMEDIATIONS.get(
                     item.get("rule_id"), "Rà soát và bổ sung cấu hình bảo mật theo khuyến nghị OWASP."
                 )
+            raw_status = item.get("alert_status") or "NO_ALERT"
+            item["alert_status"] = ALERT_STATUS_LABELS.get(raw_status, raw_status)
             rows.append(item)
 
         conn.close()

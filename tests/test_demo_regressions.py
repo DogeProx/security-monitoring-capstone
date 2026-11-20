@@ -73,7 +73,7 @@ class DemoRegressionTests(TestCase):
 
             rows = load_report(database)
             self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["Trạng thái cảnh báo"], "NEW")
+            self.assertEqual(rows[0]["Trạng thái cảnh báo"], "Mới")
             self.assertIn("HttpOnly", rows[0]["Cách khắc phục"])
 
     def test_exports_handle_empty_data_and_escape_html_cells(self):

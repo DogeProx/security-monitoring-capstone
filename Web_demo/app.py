@@ -247,10 +247,3 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print("\n🛑 Đã dừng Web Demo.")
         server.server_close()
-if __name__ == "__main__":
-    with HTTPServer(("127.0.0.1", 5000), DemoHandler) as server:
-        print("Web demo: http://127.0.0.1:5000")
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            print("Web demo stopped.")
