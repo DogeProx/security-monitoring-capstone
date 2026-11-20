@@ -1,29 +1,41 @@
 {
-  "demo_suite_name": "Bo du lieu kiem thu Web Demo chuan",
+  "demo_suite_name": "Bộ dữ liệu kiểm thử Web Demo chuẩn (7 Endpoints)",
+  "origin": "http://127.0.0.1:5000",
   "targets": [
     {
       "url": "http://127.0.0.1:5000/secure",
-      "description": "Trang sach cau hinh day du Security Headers"
+      "expected_status": 200,
+      "description": "Trang sạch cấu hình đầy đủ Security Headers (CSP, XCTO) và cookie có HttpOnly (kỳ vọng 0 phát hiện)"
     },
     {
       "url": "http://127.0.0.1:5000/vuln-headers",
-      "description": "Thieu CSP va X-Content-Type-Options"
+      "expected_status": 200,
+      "description": "Trang thiếu header bảo mật Content-Security-Policy và X-Content-Type-Options"
     },
     {
       "url": "http://127.0.0.1:5000/vuln-cookie",
-      "description": "Cookie phien thieu co HttpOnly"
+      "expected_status": 200,
+      "description": "Trang đặt cookie phiên session_id thiếu cờ HttpOnly"
     },
     {
       "url": "http://127.0.0.1:5000/vuln-multi",
-      "description": "Nhieu phat hien dong thoi (Headers + Cookie + Server Banner)"
+      "expected_status": 200,
+      "description": "Trang chứa nhiều phát hiện đồng thời (thiếu CSP, thiếu XCTO và cookie phiên thiếu HttpOnly)"
     },
     {
       "url": "http://127.0.0.1:5000/api/data",
-      "description": "API JSON - Kiem tra chong bao sai (False Positive)"
+      "expected_status": 200,
+      "description": "API JSON (application/json) - Kiểm tra chống báo sai quy tắc CSP"
     },
     {
       "url": "http://127.0.0.1:5000/public-page",
-      "description": "Trang khong dat cookie phien"
+      "expected_status": 200,
+      "description": "Trang công khai cấu hình đủ Security Headers và không đặt cookie phiên"
+    },
+    {
+      "url": "http://127.0.0.1:5000/error",
+      "expected_status": 500,
+      "description": "Trang giả lập lỗi máy chủ HTTP 500 Internal Server Error để kiểm thử xử lý mã lỗi"
     }
   ]
 }
