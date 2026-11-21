@@ -15,7 +15,7 @@ Tuần 6 tập trung kiểm tra luồng hoạt động của hệ thống Automa
 - Hệ điều hành: Windows.
 - Terminal: PowerShell.
 - Python environment: `.venv`.
-- Web Demo: Flask, chạy tại `http://127.0.0.1:5000`.
+- Web Demo: thư viện chuẩn Python http.server, chạy tại `http://127.0.0.1:5000`.
 - Dashboard: Streamlit, chạy tại `http://127.0.0.1:8501`.
 - Cơ sở dữ liệu: SQLite (`security_monitoring.db`).
 
@@ -161,14 +161,7 @@ Máy chủ vẫn thiết lập kết nối và trả về phản hồi HTTP 500.
 
 ### 4.6. Bằng chứng
 
-Lưu ảnh trang Web Demo và ảnh Dashboard với các tên sau:
-
-- `docs/images/week6-http500-web.png`
-- `docs/images/week6-http500-dashboard.png`
-
-![Web Demo trả về HTTP 500](docs/images/week6-http500-web.png)
-
-![Dashboard ghi nhận lượt quét HTTP 500 hoàn tất](docs/images/week6-http500-dashboard.png)
+Kết quả kiểm thử tự động cho ca HTTP 500 được lưu trong [log nghiệm thu](docs/week6_scanner_results.txt).
 
 ## 5. Kiểm thử trường hợp FAILED
 
@@ -207,11 +200,7 @@ Scanner không thể thiết lập kết nối tới máy chủ tại `127.0.0.1
 
 ### 5.6. Bằng chứng
 
-Lưu ảnh Dashboard với tên:
-
-`docs/images/week6-failed-scan.png`
-
-![Dashboard hiển thị lượt quét FAILED](docs/images/week6-failed-scan.png)
+Kết quả kiểm thử tự động cho ca FAILED được lưu trong [log nghiệm thu](docs/week6_scanner_results.txt).
 
 ## 6. Kiểm thử trường hợp PARTIAL
 
@@ -300,14 +289,7 @@ Worker xử lý thành công URL `/secure`, đồng thời ghi nhận lỗi kế
 
 ### 6.6. Bằng chứng
 
-Lưu hai ảnh với tên:
-
-- `docs/images/week6-partial-worker.png`
-- `docs/images/week6-partial-dashboard.png`
-
-![Worker xử lý lượt quét PARTIAL](docs/images/week6-partial-worker.png)
-
-![Dashboard hiển thị trạng thái PARTIAL](docs/images/week6-partial-dashboard.png)
+Kết quả kiểm thử tự động cho ca PARTIAL được lưu trong [log nghiệm thu](docs/week6_scanner_results.txt).
 
 ## 7. Kiểm thử Redirect ngoài phạm vi
 
@@ -315,53 +297,22 @@ Lưu hai ảnh với tên:
 
 Kiểm tra Scanner có nhận được phản hồi HTTP redirect hay không, đồng thời xác nhận Scanner không truy cập đến URL redirect nằm ngoài phạm vi được cho phép.
 
-### 7.2. Cấu hình kiểm thử
+### 7.2. Cấu hình và cách chạy
 
-- URL ban đầu: `http://127.0.0.1:8000`
-- Allowed Hosts: `http://127.0.0.1:8000`
-- Redirect Location: `https://google.com`
-- HTTP Response: `302 Found`
-
-### 7.3. Cách thực hiện
-
-Bài test sử dụng một HTTP server cục bộ tại `127.0.0.1:8000`. Server trả về HTTP 302 và đặt header `Location` trỏ đến `https://google.com`.
-
-Chạy bài kiểm thử:
+Bài test dựng hai HTTP server trên localhost với cổng trống do hệ điều hành cấp. Origin của máy chủ đầu tiên được cấp phép. Máy chủ này trả HTTP 302 tới máy chủ thứ hai nằm ngoài origin được cấp phép.
 
 ```powershell
 python test_redirect.py
 ```
 
-### 7.4. Kết quả thực tế
+### 7.3. Điều kiện kiểm tra và kết quả
 
-```text
-Redirect test result: {
-    'url': 'http://127.0.0.1:8000',
-    'final_url': 'https://google.com',
-    'status': 'failed',
-    'status_code': 302,
-    'redirect_count': 0,
-    'error': 'Redirect target is outside allowed scope'
-}
+- Máy chủ nguồn nhận đúng một yêu cầu và trả HTTP 302.
+- Máy chủ đích nhận 0 yêu cầu.
+- Kết quả scanner có `status="failed"`, lỗi `Redirect target is outside allowed scope` và `redirect_count=0`.
+- Theo schema hiện tại, kết quả lỗi có `status_code=None`. HTTP 302 được xác nhận từ máy chủ nguồn trong bài test.
 
-PASS: Received HTTP 302 and blocked external redirect.
-```
-
-Các giá trị xác nhận:
-
-| Thuộc tính | Kết quả |
-|---|---|
-| HTTP Status Code | `302` |
-| Scanner Status | `failed` |
-| Final URL được phát hiện | `https://google.com` |
-| Redirect Count | `0` |
-| Error | `Redirect target is outside allowed scope` |
-
-### 7.5. Nhận xét
-
-Scanner truy cập URL ban đầu nằm trong phạm vi cho phép và nhận được phản hồi HTTP 302. Khi phát hiện header `Location` trỏ đến `https://google.com`, Scanner xác định URL đích nằm ngoài phạm vi, chặn redirect và không gửi request tiếp theo đến địa chỉ đó.
-
-Bài kiểm thử PASS, xác nhận cơ chế kiểm soát phạm vi redirect hoạt động đúng với tình huống kiểm thử này.
+Bài test có assertion cho từng điều kiện trên và tự báo lỗi nếu kết quả sai. [Log chạy thực tế](docs/week6_scanner_results.txt).
 
 ## 8. Tổng kết kết quả Week 6
 
@@ -383,4 +334,15 @@ Các tình huống HTTP 500, FAILED và PARTIAL cho thấy hệ thống phân bi
 
 Bài kiểm thử redirect cũng xác nhận Scanner nhận được HTTP 302 từ URL ban đầu và chặn đích redirect nằm ngoài phạm vi cho phép.
 
-Các kết quả trên được ghi nhận từ những lượt kiểm thử và ảnh/log thực tế tương ứng trong quá trình thực hiện Week 6.
+Các mã lượt quét trong báo cáo là bản ghi do thành viên bàn giao. Bốn ca lỗi và chuyển hướng đã được chạy lại tự động trên Windows với cơ sở dữ liệu tạm, có kết quả tại [log nghiệm thu](docs/week6_scanner_results.txt).
+
+## 10. Chạy lại bộ nghiệm thu của bộ quét
+
+Từ thư mục gốc dự án, chạy:
+
+```powershell
+python -X utf8 -m unittest test_redirect tests.test_scanner_week6 -v
+python -m pytest -q
+```
+
+Bộ nghiệm thu tự dựng web localhost trên cổng trống và tạo SQLite tạm. Có thể chạy lại mà không cần khởi động worker hoặc web demo riêng.

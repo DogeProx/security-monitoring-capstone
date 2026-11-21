@@ -1,0 +1,32 @@
+Windows verification - 21/11/2026
+Command: python -X utf8 -B -m unittest test_redirect tests.test_scanner_week6 -v
+
+PASS redirect: received local HTTP 302; destination requests = 0; blocked outside origin.
+Processing scan: 2b4ceead-d442-4882-a5f2-52146c1c27a8
+Progress: 1/1 - http://127.0.0.1:63194/secure - failed
+Scan finished: failed
+Summary: {'total': 1, 'completed': 0, 'failed': 1}
+PASS FAILED: offline server; scan FAILED; successful URLs 0/1.
+Processing scan: 5d5953cd-8402-41b3-8327-5189816947bf
+Progress: 1/1 - http://127.0.0.1:63199/error - completed
+Scan finished: completed
+Summary: {'total': 1, 'completed': 1, 'failed': 0}
+PASS HTTP 500: response code 500; scan COMPLETED; successful URLs 1/1.
+Processing scan: 5a94c55b-c291-4220-a47d-0e637b1dee00
+Progress: 1/2 - http://127.0.0.1:63202/secure - completed
+Progress: 2/2 - http://127.0.0.1:63201/secure - failed
+Scan finished: partial
+Summary: {'total': 2, 'completed': 1, 'failed': 1}
+PASS PARTIAL: one reachable and one offline URL; successful URLs 1/2.
+
+test_blocks_redirect_after_receiving_response (test_redirect.RedirectTests.test_blocks_redirect_after_receiving_response) ... ok
+test_failed_scan_when_server_is_offline (tests.test_scanner_week6.ScannerWeek6Tests.test_failed_scan_when_server_is_offline) ... ok
+test_http500_is_a_received_response (tests.test_scanner_week6.ScannerWeek6Tests.test_http500_is_a_received_response) ... 127.0.0.1 - - [21/Nov/2026 12:16:31] "GET /error HTTP/1.1" 500 -
+ok
+test_partial_scan_with_one_offline_url (tests.test_scanner_week6.ScannerWeek6Tests.test_partial_scan_with_one_offline_url) ... 127.0.0.1 - - [21/Nov/2026 12:16:32] "GET /secure HTTP/1.1" 200 -
+ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 7.144s
+
+OK
