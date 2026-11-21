@@ -1,55 +1,33 @@
-# TUẦN 6 – DEMO VÀ KIỂM THỬ BỘ QUÉT WEB SECURITY SCANNER
+# WEEK 6 – KIỂM THỬ VÀ DEMO HỆ THỐNG AUTOMATED WEB SECURITY SCANNER
 
-## 1. Mục tiêu
+## 1. Mục tiêu tuần 6
 
-Tuần 6 tập trung thực hiện demo hệ thống Automated Web Security Scanner trên môi trường website thử nghiệm do nhóm xây dựng.
+Tuần 6 tập trung kiểm tra luồng hoạt động của hệ thống Automated Web Security Scanner, bao gồm:
 
-Các mục tiêu chính:
-
-- Khởi động website thử nghiệm phục vụ quá trình quét.
-- Chạy bộ Scanner trực tiếp để kiểm tra khả năng thu thập thông tin và phát hiện cấu hình bảo mật chưa an toàn.
-- Khởi động Worker để xử lý các lượt quét trong hàng đợi.
-- Kiểm tra cơ chế đưa lượt quét vào Queue.
-- Khởi động Dashboard để theo dõi kết quả.
-- Kiểm tra thông tin lượt quét, trạng thái xử lý, findings và alerts.
-- Giải thích ý nghĩa các trạng thái của một lượt quét dựa trên kết quả thực tế.
+- Khởi chạy Web Demo và thực hiện quét các URL mục tiêu.
+- Kiểm tra luồng xử lý scan job thông qua Worker và Queue.
+- Theo dõi kết quả quét trên Dashboard.
+- Kiểm tra các tình huống HTTP 500, FAILED và PARTIAL.
+- Kiểm tra cơ chế xử lý HTTP redirect và ngăn Scanner truy cập URL nằm ngoài phạm vi cho phép.
 
 ## 2. Môi trường kiểm thử
 
-| Thành phần | Thông tin |
-|---|---|
-| Hệ điều hành | Windows |
-| Ngôn ngữ | Python |
-| Môi trường | Virtual Environment (`.venv`) |
-| Website thử nghiệm | Web Demo ATTT |
-| Địa chỉ website | `http://127.0.0.1:5000` |
-| Dashboard | Streamlit |
-| Địa chỉ Dashboard | `http://127.0.0.1:8501` |
-| Database | SQLite |
-| Các thành phần xử lý | Scanner, Worker, Queue, Dashboard |
+- Hệ điều hành: Windows.
+- Terminal: PowerShell.
+- Python environment: `.venv`.
+- Web Demo: Flask, chạy tại `http://127.0.0.1:5000`.
+- Dashboard: Streamlit, chạy tại `http://127.0.0.1:8501`.
+- Cơ sở dữ liệu: SQLite (`security_monitoring.db`).
 
-Website thử nghiệm được xây dựng trong thư mục `Web_demo`, cung cấp 7 endpoint phục vụ kiểm thử các tình huống bảo mật khác nhau.
+### 2.1. Khởi chạy Web Demo
 
-## 3. Triển khai môi trường demo
-
-### 3.1. Khởi động website thử nghiệm
-
-Tại thư mục gốc dự án, mở một terminal và chạy:
+Tại thư mục gốc dự án, chạy:
 
 ```powershell
 python -X utf8 Web_demo/app.py
 ```
 
-Kết quả ghi nhận:
-
-```text
-Web Demo ATTT đã sẵn sàng (7 Endpoints)!
-Truy cập giao diện tại: http://127.0.0.1:5000
-```
-
-Truy cập địa chỉ `http://127.0.0.1:5000` bằng trình duyệt để kiểm tra giao diện website thử nghiệm.
-
-Các endpoint hiển thị trên giao diện gồm:
+Web Demo cung cấp các endpoint phục vụ kiểm thử, bao gồm:
 
 - `/secure`
 - `/vuln-headers`
@@ -59,262 +37,350 @@ Các endpoint hiển thị trên giao diện gồm:
 - `/api/data`
 - `/error`
 
-Trong đó, các endpoint `/secure`, `/vuln-headers` và `/vuln-cookie` được sử dụng trong lượt quét trực tiếp được ghi nhận ở phần tiếp theo.
+### 2.2. Khởi chạy Worker
 
-### 3.2. Chạy Scanner trực tiếp
-
-Mở terminal khác tại thư mục gốc dự án và chạy:
-
-```powershell
-python integration.py
-```
-
-Kết quả thực tế:
-
-```text
-Processing scan: 6896a22a-ee01-46a3-b339-a7138e62d93b
-
-Progress: 1/3 - http://127.0.0.1:5000/secure - completed
-Progress: 2/3 - http://127.0.0.1:5000/vuln-headers - completed
-Progress: 3/3 - http://127.0.0.1:5000/vuln-cookie - completed
-
-Scan finished: completed
-Summary: {'total': 3, 'completed': 3, 'failed': 0}
-
-Mã lượt quét: 6896a22a-ee01-46a3-b339-a7138e62d93b
-Trạng thái: completed
-```
-
-**Kết quả:**
-
-- Tổng số URL được kiểm tra: 3.
-- Số URL xử lý thành công: 3.
-- Số URL thất bại: 0.
-- Trạng thái tổng thể: `completed`.
-
-Điều này chứng minh Scanner có thể thực hiện lượt quét trên các endpoint thử nghiệm và hoàn thành quá trình xử lý cả 3 URL.
-
-### 3.3. Khởi động Worker
-
-Mở một terminal khác và chạy:
+Mở một Terminal riêng tại thư mục gốc dự án:
 
 ```powershell
 python worker.py
 ```
 
-Kết quả ghi nhận:
+Worker nhận các scan job từ Queue và thực hiện xử lý.
 
-```text
-Worker started.
-Recovered jobs: 1
-```
+### 2.3. Khởi chạy Dashboard
 
-Sau khi khởi động, Worker tiếp nhận và xử lý các lượt quét đang chờ trong hàng đợi.
-
-Các log thực tế thể hiện:
-
-```text
-Processing scan: <scan_id>
-
-Progress: 1/3 - http://127.0.0.1:5000/secure - completed
-Progress: 2/3 - http://127.0.0.1:5000/vuln-headers - completed
-Progress: 3/3 - http://127.0.0.1:5000/vuln-cookie - completed
-
-Scan finished: completed
-Summary: {'total': 3, 'completed': 3, 'failed': 0}
-```
-
-Log cũng ghi nhận nhiều lượt quét được Worker xử lý liên tiếp.
-
-**Ý nghĩa:**
-
-- Worker được khởi động độc lập với Dashboard.
-- Worker ghi nhận có 1 job được phục hồi khi khởi động (`Recovered jobs: 1`).
-- Worker tiếp tục xử lý các lượt quét và cập nhật tiến trình theo từng URL.
-- Các lượt quét hiển thị trong log đều có 3 URL hoàn thành, không có URL thất bại.
-
-### 3.4. Đưa lượt quét vào hàng đợi
-
-Sử dụng terminal khác để chạy:
-
-```powershell
-python integration.py --enqueue
-```
-
-Kết quả:
-
-```text
-Đã tạo yêu cầu quét: 73e3c28e-33f9-4c02-8bec-c6e24a5e154d
-```
-
-Lệnh này thực hiện thao tác tạo yêu cầu quét và đưa yêu cầu vào hàng đợi để Worker xử lý.
-
-Đây là bước minh họa cơ chế tách biệt giữa việc tạo yêu cầu quét và quá trình thực thi lượt quét.
-
-### 3.5. Khởi động Dashboard
-
-Mở terminal khác và chạy:
+Mở một Terminal khác:
 
 ```powershell
 python -m streamlit run dashboard/app.py --server.address 127.0.0.1
 ```
 
-Kết quả:
-
-```text
-You can now view your Streamlit app in your browser.
-
-URL: http://127.0.0.1:8501
-```
-
-Truy cập:
+Truy cập Dashboard tại:
 
 `http://127.0.0.1:8501`
 
-Dashboard cung cấp giao diện theo dõi các lượt quét, findings và alerts.
+Giữ các Terminal tương ứng hoạt động trong quá trình kiểm thử.
 
-## 4. Kết quả kiểm thử trên Dashboard
+## 3. Kiểm thử quét trực tiếp và Dashboard
 
-### 4.1. Tổng quan hệ thống
+### 3.1. Chạy Scanner trực tiếp
 
-Tại thời điểm chụp bằng chứng, Dashboard hiển thị:
+Chạy lệnh:
+
+```powershell
+python integration.py
+```
+
+Kết quả kiểm thử đã ghi nhận:
+
+- Scan ID: `6896a22a-ee01-46a3-b339-a7138e62d93b`
+- Số URL hoàn tất: `3/3`
+- Các URL được kiểm thử:
+  - `/secure`
+  - `/vuln-headers`
+  - `/vuln-cookie`
+
+### 3.2. Tạo scan job qua Queue
+
+Chạy:
+
+```powershell
+python integration.py --enqueue
+```
+
+Một Scan ID đã được ghi nhận trong quá trình kiểm thử:
+
+`73e3c28e-33f9-4c02-8bec-c6e24a5e154d`
+
+Worker xử lý các job được đưa vào Queue. Trong log khởi động Worker có ghi nhận:
+
+`Recovered jobs: 1`
+
+### 3.3. Số liệu Dashboard tại thời điểm chụp
+
+Dashboard từng ghi nhận các số liệu sau:
 
 | Chỉ số | Giá trị |
 |---|---:|
-| Lượt quét | 113 |
-| Tổng URL yêu cầu | 319 |
-| Phát hiện | 403 |
-| Cảnh báo | 79 |
+| Tổng lượt quét | 113 |
+| Tổng URL mục tiêu | 319 |
+| Tổng findings | 403 |
+| Tổng alerts | 79 |
 
-Các số liệu trên là số liệu tổng quan được Dashboard hiển thị tại thời điểm chụp, không phải số liệu riêng của một lượt quét.
+Đây là số liệu tại thời điểm chụp ảnh kiểm thử, không phải số liệu cố định của hệ thống.
 
-Dashboard hỗ trợ lọc theo:
+### 3.4. Một số findings được quan sát
 
-- Khoảng ngày tạo lượt quét.
-- Mục tiêu.
-- Mức độ nghiêm trọng.
+| URL | Rule | Mức độ |
+|---|---|---|
+| `/vuln-cookie` | `SEC-CKI-HTTPONLY` | High |
+| `/vuln-cookie` | `SEC-HDR-XCTO` | Low |
+| `/vuln-cookie` | `SEC-HDR-CSP` | Medium |
+| `/vuln-headers` | `SEC-HDR-XCTO` | Low |
+| `/vuln-headers` | `SEC-HDR-CSP` | Medium |
 
-Ngoài ra, giao diện có các tab:
+Các findings trên là kết quả quan sát được trong lượt demo tương ứng.
 
-- Lượt quét.
-- Phát hiện.
-- Cảnh báo.
+## 4. Kiểm thử trường hợp HTTP 500
 
-### 4.2. Kiểm tra thông tin một lượt quét
+### 4.1. Mục tiêu
 
-Lượt quét được sử dụng làm bằng chứng:
+Kiểm tra cách Scanner xử lý khi máy chủ đích trả về mã trạng thái HTTP `500 Internal Server Error`.
 
-`6896a22a-ee01-46a3-b339-a7138e62d93b`
+### 4.2. URL kiểm thử
 
-Thông tin hiển thị:
+`http://127.0.0.1:5000/error`
 
-| Thuộc tính | Giá trị |
-|---|---|
-| Mã lượt quét | `6896a22a-ee01-46a3-b339-a7138e62d93b` |
-| Mục tiêu | `/secure`, `/vuln-headers`, `/vuln-cookie` |
-| Thời điểm tạo | 20/11/2026 23:23:18 |
-| Thời điểm kết thúc | 20/11/2026 23:23:18 |
-| Trạng thái | Hoàn tất |
-| URL thành công | 3 |
-| Tổng URL | 3 |
-| Thông tin lỗi | Không có |
+Endpoint `/error` của Web Demo được thiết kế để trả về trang lỗi HTTP 500.
 
-Kết quả cho thấy lượt quét hoàn thành đầy đủ cả 3 URL mục tiêu.
+### 4.3. Cách thực hiện
 
-### 4.3. Kiểm tra các phát hiện bảo mật
+Đảm bảo Web Demo đang chạy, sau đó tạo scan job:
 
-Dashboard hiển thị các findings được liên kết với lượt quét trên.
-
-| Mã phát hiện | URL | Quy tắc | Mức độ | Bằng chứng |
-|---|---|---|---|---|
-| 406 | `/vuln-cookie` | `SEC-CKI-HTTPONLY` | Cao | Cookie `session_id` thiếu cờ HttpOnly |
-| 405 | `/vuln-cookie` | `SEC-HDR-XCTO` | Thấp | Thiếu X-Content-Type-Options |
-| 404 | `/vuln-cookie` | `SEC-HDR-CSP` | Trung bình | Thiếu Content-Security-Policy |
-| 403 | `/vuln-headers` | `SEC-HDR-XCTO` | Thấp | Thiếu X-Content-Type-Options |
-| 402 | `/vuln-headers` | `SEC-HDR-CSP` | Trung bình | Thiếu Content-Security-Policy |
-
-**Phân tích kết quả:**
-
-1. `SEC-CKI-HTTPONLY`: Phát hiện cookie phiên `session_id` không có thuộc tính HttpOnly. Điều này làm tăng nguy cơ cookie bị truy cập thông qua JavaScript khi xảy ra lỗ hổng XSS.
-2. `SEC-HDR-XCTO`: Phát hiện máy chủ không trả về header `X-Content-Type-Options: nosniff`, làm giảm khả năng ngăn trình duyệt tự suy đoán kiểu nội dung.
-3. `SEC-HDR-CSP`: Phát hiện thiếu header Content-Security-Policy, khiến website thiếu một lớp kiểm soát nguồn tài nguyên được phép tải và thực thi.
-
-Dashboard hiển thị cả mã quy tắc, mức độ, bằng chứng và hướng khắc phục cho từng phát hiện.
-
-## 5. Giải thích các trạng thái lượt quét
-
-Trong quá trình demo, cần phân biệt trạng thái của một lượt quét với trạng thái xử lý của từng URL.
-
-### 5.1. Trạng thái `PENDING`
-
-Lượt quét đã được tạo và đang chờ Worker tiếp nhận xử lý.
-
-Đây là trạng thái có ý nghĩa trong cơ chế Queue: hệ thống đã ghi nhận yêu cầu nhưng quá trình quét chưa bắt đầu.
-
-### 5.2. Trạng thái `RUNNING`
-
-Worker đã tiếp nhận lượt quét và đang thực hiện các công việc kiểm tra.
-
-Trong terminal, trạng thái này được thể hiện thông qua log `Processing scan` và các dòng `Progress` khi Worker xử lý từng URL.
-
-### 5.3. Trạng thái `COMPLETED`
-
-Lượt quét kết thúc bình thường.
-
-Trong bằng chứng thực tế:
-
-```text
-Summary: {'total': 3, 'completed': 3, 'failed': 0}
-Trạng thái: completed
+```powershell
+python integration.py --url http://127.0.0.1:5000/error --enqueue
 ```
 
-Điều đó có nghĩa cả 3 URL đều được xử lý thành công.
+Worker xử lý job và kết quả được theo dõi trên Dashboard.
 
-Lưu ý: `COMPLETED` không đồng nghĩa website an toàn. Một lượt quét có thể hoàn thành bình thường nhưng vẫn phát hiện nhiều vấn đề bảo mật.
+### 4.4. Kết quả thực tế
 
-### 5.4. Trạng thái `FAILED`
+- Scan ID: `03f8078f-17c6-4da0-92ea-4f5bf5ddfdc9`
+- URL mục tiêu: `http://127.0.0.1:5000/error`
+- HTTP Status Code: `500 Internal Server Error`
+- Trạng thái lượt quét trên Dashboard: `Hoàn tất`
+- URL thành công: `1`
+- Tổng URL: `1`
+- Thông tin lỗi trên Dashboard: `—`
 
-Lượt quét thất bại do lỗi nghiêm trọng trong quá trình xử lý.
+### 4.5. Nhận xét
 
-Cần phân biệt trạng thái này với trường hợp một website có phát hiện bảo mật. Việc phát hiện thiếu security header không khiến lượt quét trở thành `FAILED`.
+Máy chủ vẫn thiết lập kết nối và trả về phản hồi HTTP 500. Theo logic xử lý hiện tại của hệ thống, Scanner nhận được phản hồi HTTP nên URL được ghi nhận là `completed`; do đó lượt quét có trạng thái `Hoàn tất`.
 
-### 5.5. Trạng thái `PARTIAL`
+Điều này khác với trường hợp FAILED, trong đó Scanner không thể kết nối đến máy chủ và không nhận được phản hồi HTTP.
 
-Lượt quét hoàn thành một phần, nhưng có URL hoặc công việc không xử lý thành công.
+### 4.6. Bằng chứng
 
-Ví dụ về mặt ý nghĩa: một lượt quét có 3 URL, trong đó 2 URL được xử lý thành công và 1 URL thất bại.
+Lưu ảnh trang Web Demo và ảnh Dashboard với các tên sau:
 
-**Lưu ý:** Các trạng thái trên cần được đối chiếu với logic cập nhật trạng thái trong code của dự án. Bằng chứng tuần 6 hiện tại trực tiếp thể hiện trạng thái `completed`; chưa có ảnh log chứng minh lượt quét thực tế đạt `FAILED` hoặc `PARTIAL`.
+- `docs/images/week6-http500-web.png`
+- `docs/images/week6-http500-dashboard.png`
 
-## 6. Đánh giá kết quả kiểm thử
+![Web Demo trả về HTTP 500](docs/images/week6-http500-web.png)
 
-| Hạng mục | Kết quả ghi nhận | Đánh giá |
-|---|---|---|
-| Khởi động Web Demo | Website chạy tại port 5000, hiển thị 7 endpoint | Đạt |
-| Scanner trực tiếp | 3/3 URL hoàn thành | Đạt |
-| Worker | Khởi động và xử lý các lượt quét | Đạt |
-| Job Recovery | Ghi nhận `Recovered jobs: 1` | Đạt |
-| Queue | Tạo yêu cầu quét thành công | Đạt |
-| Dashboard | Khởi động tại port 8501 | Đạt |
-| Hiển thị lịch sử quét | Hiển thị mã lượt quét, mục tiêu, thời gian và trạng thái | Đạt |
-| Phát hiện bảo mật | Hiển thị các findings về CSP, XCTO và HttpOnly | Đạt |
-| Hiển thị cảnh báo | Dashboard có tab và số liệu cảnh báo | Đạt |
-| Kiểm thử endpoint HTTP 500 | Có endpoint `/error` trên Web Demo, nhưng chưa có bằng chứng Scanner đã quét endpoint này | Chưa xác nhận |
-| Kiểm thử trạng thái FAILED/PARTIAL | Chưa có bằng chứng lượt quét thực tế ở hai trạng thái này | Chưa xác nhận |
+![Dashboard ghi nhận lượt quét HTTP 500 hoàn tất](docs/images/week6-http500-dashboard.png)
 
-## 7. Kết luận tuần 6
+## 5. Kiểm thử trường hợp FAILED
 
-Qua quá trình demo và kiểm thử, hệ thống Automated Web Security Scanner đã thể hiện được luồng hoạt động chính:
+### 5.1. Mục tiêu
 
-1. Website thử nghiệm được khởi động và cung cấp các endpoint phục vụ kiểm thử.
-2. Scanner thực hiện quét trực tiếp trên các mục tiêu được cấu hình.
-3. Worker có khả năng tiếp nhận và xử lý các lượt quét thông qua hàng đợi.
-4. Hệ thống ghi nhận mã lượt quét và tiến trình xử lý từng URL.
-5. Dashboard hiển thị lịch sử quét, trạng thái, các phát hiện và cảnh báo.
-6. Các phát hiện về thiếu security headers và thuộc tính HttpOnly được hiển thị kèm bằng chứng và hướng khắc phục.
+Kiểm tra cách hệ thống xử lý khi URL mục tiêu không thể kết nối được và Scanner không nhận được phản hồi HTTP.
 
-Lượt quét trực tiếp có mã `6896a22a-ee01-46a3-b339-a7138e62d93b` đã hoàn thành 3/3 URL, không có URL thất bại. Dashboard cũng hiển thị các phát hiện tương ứng với hai endpoint `/vuln-headers` và `/vuln-cookie`.
+### 5.2. URL kiểm thử
 
-Nhìn chung, các bằng chứng hiện có xác nhận được hoạt động cơ bản của Scanner, Worker, Queue, Database và Dashboard trong luồng demo.
+`http://127.0.0.1:59999`
 
-Các tình huống HTTP 500, FAILED và PARTIAL cần được kiểm thử bổ sung trước khi kết luận toàn bộ các trường hợp lỗi đã được nghiệm thu.
+Cổng `59999` không có dịch vụ lắng nghe tại thời điểm kiểm thử, do đó kết nối bị từ chối.
+
+### 5.3. Cách thực hiện
+
+Tạo scan job:
+
+```powershell
+python integration.py --url http://127.0.0.1:59999 --enqueue
+```
+
+Sau đó để Worker xử lý job và kiểm tra trạng thái trên Dashboard.
+
+### 5.4. Kết quả thực tế
+
+- Scan ID: `7deedaf1-e618-4ab2-b3bb-0d63288d2344`
+- URL mục tiêu: `http://127.0.0.1:59999`
+- Trạng thái: `Thất bại (FAILED)`
+- Tổng URL: `1`
+- URL thành công: `0`
+- Thông tin lỗi: `ConnectionError` / connection refused.
+
+### 5.5. Nhận xét
+
+Scanner không thể thiết lập kết nối tới máy chủ tại `127.0.0.1:59999`, vì vậy không nhận được phản hồi HTTP. Hệ thống ghi nhận URL thất bại và lượt quét có trạng thái FAILED.
+
+### 5.6. Bằng chứng
+
+Lưu ảnh Dashboard với tên:
+
+`docs/images/week6-failed-scan.png`
+
+![Dashboard hiển thị lượt quét FAILED](docs/images/week6-failed-scan.png)
+
+## 6. Kiểm thử trường hợp PARTIAL
+
+### 6.1. Mục tiêu
+
+Kiểm tra khả năng xử lý một lượt quét có nhiều URL, trong đó có URL truy cập được và URL không thể kết nối.
+
+### 6.2. Các URL kiểm thử
+
+1. `http://127.0.0.1:5000/secure` – URL truy cập thành công.
+2. `http://127.0.0.1:59999` – URL không thể kết nối.
+
+### 6.3. Cách thực hiện
+
+Do lệnh `integration.py --url` nhận một URL cho mỗi lần gọi, tạo một script riêng để đưa hai URL vào cùng một scan job.
+
+Tạo file `create_partial_scan.py` tại thư mục gốc dự án:
+
+```python
+from pathlib import Path
+
+from storage.db import create_scan_job, init_db
+
+
+DB_PATH = Path(__file__).with_name("security_monitoring.db")
+
+targets = [
+    "http://127.0.0.1:5000/secure",
+    "http://127.0.0.1:59999"
+]
+
+allowed_hosts = [
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:59999"
+]
+
+
+def main():
+    init_db(DB_PATH)
+
+    scan_id = create_scan_job(
+        DB_PATH,
+        targets,
+        allowed_hosts
+    )
+
+    print("Đã tạo lượt quét PARTIAL:")
+    print("Scan ID:", scan_id)
+    print("URL 1:", targets[0])
+    print("URL 2:", targets[1])
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Chạy script:
+
+```powershell
+python create_partial_scan.py
+```
+
+Worker xử lý job; theo dõi log và trạng thái trên Dashboard.
+
+### 6.4. Kết quả thực tế
+
+- Scan ID: `40b5d9d8-96c2-437e-89d4-4b85fc544f7f`
+- Trạng thái: `Hoàn tất một phần (PARTIAL)`
+- Tổng URL: `2`
+- URL hoàn tất: `1`
+- URL thất bại: `1`
+
+Log Worker:
+
+```text
+Processing scan: 40b5d9d8-96c2-437e-89d4-4b85fc544f7f
+Progress: 1/2 - http://127.0.0.1:5000/secure - completed
+Progress: 2/2 - http://127.0.0.1:59999 - failed
+Scan finished: partial
+Summary: {'total': 2, 'completed': 1, 'failed': 1}
+```
+
+### 6.5. Nhận xét
+
+Worker xử lý thành công URL `/secure`, đồng thời ghi nhận lỗi kết nối đối với URL sử dụng cổng `59999`. Vì chỉ có một trong hai URL hoàn tất nên trạng thái tổng hợp của lượt quét là PARTIAL.
+
+### 6.6. Bằng chứng
+
+Lưu hai ảnh với tên:
+
+- `docs/images/week6-partial-worker.png`
+- `docs/images/week6-partial-dashboard.png`
+
+![Worker xử lý lượt quét PARTIAL](docs/images/week6-partial-worker.png)
+
+![Dashboard hiển thị trạng thái PARTIAL](docs/images/week6-partial-dashboard.png)
+
+## 7. Kiểm thử Redirect ngoài phạm vi
+
+### 7.1. Mục tiêu
+
+Kiểm tra Scanner có nhận được phản hồi HTTP redirect hay không, đồng thời xác nhận Scanner không truy cập đến URL redirect nằm ngoài phạm vi được cho phép.
+
+### 7.2. Cấu hình kiểm thử
+
+- URL ban đầu: `http://127.0.0.1:8000`
+- Allowed Hosts: `http://127.0.0.1:8000`
+- Redirect Location: `https://google.com`
+- HTTP Response: `302 Found`
+
+### 7.3. Cách thực hiện
+
+Bài test sử dụng một HTTP server cục bộ tại `127.0.0.1:8000`. Server trả về HTTP 302 và đặt header `Location` trỏ đến `https://google.com`.
+
+Chạy bài kiểm thử:
+
+```powershell
+python test_redirect.py
+```
+
+### 7.4. Kết quả thực tế
+
+```text
+Redirect test result: {
+    'url': 'http://127.0.0.1:8000',
+    'final_url': 'https://google.com',
+    'status': 'failed',
+    'status_code': 302,
+    'redirect_count': 0,
+    'error': 'Redirect target is outside allowed scope'
+}
+
+PASS: Received HTTP 302 and blocked external redirect.
+```
+
+Các giá trị xác nhận:
+
+| Thuộc tính | Kết quả |
+|---|---|
+| HTTP Status Code | `302` |
+| Scanner Status | `failed` |
+| Final URL được phát hiện | `https://google.com` |
+| Redirect Count | `0` |
+| Error | `Redirect target is outside allowed scope` |
+
+### 7.5. Nhận xét
+
+Scanner truy cập URL ban đầu nằm trong phạm vi cho phép và nhận được phản hồi HTTP 302. Khi phát hiện header `Location` trỏ đến `https://google.com`, Scanner xác định URL đích nằm ngoài phạm vi, chặn redirect và không gửi request tiếp theo đến địa chỉ đó.
+
+Bài kiểm thử PASS, xác nhận cơ chế kiểm soát phạm vi redirect hoạt động đúng với tình huống kiểm thử này.
+
+## 8. Tổng kết kết quả Week 6
+
+| Hạng mục | Kết quả |
+|---|---|
+| Quét trực tiếp Web Demo | 3/3 URL hoàn tất |
+| Tạo scan job qua Queue | Đã ghi nhận job và Worker xử lý |
+| Dashboard | Hiển thị scan, URL, findings và alerts |
+| HTTP 500 | URL được ghi nhận completed; lượt quét hoàn tất |
+| FAILED | 0/1 URL thành công; lượt quét thất bại |
+| PARTIAL | 1/2 URL hoàn tất; lượt quét hoàn tất một phần |
+| Redirect ngoài scope | Nhận HTTP 302 và chặn đích ngoài phạm vi |
+
+## 9. Kết luận
+
+Qua các kiểm thử trong tuần 6, hệ thống đã thể hiện được luồng quét trực tiếp, xử lý scan job thông qua Queue và Worker, đồng thời hiển thị kết quả trên Dashboard.
+
+Các tình huống HTTP 500, FAILED và PARTIAL cho thấy hệ thống phân biệt được phản hồi HTTP từ máy chủ với lỗi không thể kết nối và tổng hợp trạng thái cho lượt quét có nhiều URL.
+
+Bài kiểm thử redirect cũng xác nhận Scanner nhận được HTTP 302 từ URL ban đầu và chặn đích redirect nằm ngoài phạm vi cho phép.
+
+Các kết quả trên được ghi nhận từ những lượt kiểm thử và ảnh/log thực tế tương ứng trong quá trình thực hiện Week 6.
