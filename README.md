@@ -69,7 +69,24 @@ Giữ web demo hoạt động, chạy `python worker.py` trong một terminal r�
 
 ### Tạo lượt quét và xử lý cảnh báo trên dashboard
 
-Giữ web demo hoạt động và chạy `python worker.py`. Trong dashboard, chọn một trang hoặc tất cả trang demo ở **Mục tiêu quét**, rồi bấm **Đưa vào hàng đợi**. Bấm **Tải lại kết quả** để xem trạng thái và số URL thành công.
+Giữ web demo hoạt động và chạy `python worker.py`. Mở **Tạo lượt quét**, chọn **Trang demo** hoặc **Nhập URL** rồi bấm **Đưa vào hàng đợi**. Ví dụ nhập `http://127.0.0.1:5000/secure`. Dashboard tự chọn lượt vừa tạo và cập nhật trạng thái khi lượt đang chờ hoặc đang chạy.
+
+Trong tab **Kết quả theo URL**, bảng **Mục tiêu** hiển thị mã HTTP và số phát hiện của từng URL. Chọn một dòng để lọc danh sách phát hiện bên cạnh, rồi chọn mức độ và mở một phát hiện để xem bằng chứng. Bỏ chọn dòng để xem lại tất cả URL trong lượt.
+
+Để kiểm tra website bên ngoài, mở hoặc tạo tệp `dashboard_origins.txt` ở thư mục gốc của dự án. Ghi địa chỉ gốc của mỗi website bạn quản lý hoặc được phép kiểm tra trên một dòng. Ghi cả giao thức và cổng nếu dùng cổng riêng. Dòng bắt đầu bằng `#` là chú thích.
+
+```text
+https://web-cua-ban.example
+```
+
+Lưu tệp và tải lại dashboard. Chọn **Nhập URL** rồi nhập đường dẫn cần kiểm tra, ví dụ `https://web-cua-ban.example/trang-chu`. Nếu nhập tên miền hoặc đường dẫn thiếu giao thức, dashboard mặc định dùng HTTPS. Khi website dùng HTTP, nhập rõ `http://`.
+
+Bạn cũng có thể cấu hình qua PowerShell trước khi mở dashboard. Dùng dấu phẩy để phân cách nhiều địa chỉ.
+
+```powershell
+$env:DASHBOARD_ALLOWED_ORIGINS = "https://web-cua-ban.example"
+python -m streamlit run dashboard/app.py --server.address 127.0.0.1
+```
 
 Ở tab **Cảnh báo**, mở bản ghi để xem phát hiện, bằng chứng, cách khắc phục và lịch sử. Chọn **Xác nhận đã xem** hoặc **Đánh dấu đã xử lý**. Dashboard ghi mỗi lần chuyển trạng thái vào lịch sử SQLite.
 

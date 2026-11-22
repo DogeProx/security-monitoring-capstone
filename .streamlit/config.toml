@@ -1,0 +1,16 @@
+[theme]
+baseRadius = "medium"
+
+[theme.light]
+primaryColor = "#255caa"
+backgroundColor = "#f7faff"
+secondaryBackgroundColor = "#e9eff7"
+textColor = "#18263c"
+borderColor = "#ccd8e7"
+
+[theme.dark]
+primaryColor = "#85b6ff"
+backgroundColor = "#101622"
+secondaryBackgroundColor = "#1b2537"
+textColor = "#edf2fc"
+borderColor = "#37455d"
