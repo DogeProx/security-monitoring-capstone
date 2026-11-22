@@ -3,8 +3,9 @@ import threading
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import patch
 
-from scanner.client import scan_url
+from scanner import is_in_scope, scan_url
 
 
 class TestHandler(BaseHTTPRequestHandler):
@@ -32,7 +33,7 @@ class TestHandler(BaseHTTPRequestHandler):
 
         elif self.path == "/redirect-external":
             self.send_response(302)
-            self.send_header("Location", "https://google.com")
+            self.send_header("Location", "https://outside.example.invalid")
             self.send_header("Content-Length", "0")
             self.end_headers()
 
@@ -79,6 +80,39 @@ class ScannerEdgeCaseTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.shutdown()
         cls.server.server_close()
+        cls.thread.join()
+
+    def assert_result_schema(self, result):
+        fields = {
+            "url", "final_url", "status", "status_code", "headers",
+            "cookies", "redirect_count", "scanned_at", "error",
+        }
+        self.assertLessEqual(fields, result.keys())
+        self.assertIsInstance(result["headers"], dict)
+        self.assertIsInstance(result["cookies"], list)
+
+    def test_scope_matches_only_allowed_urls(self):
+        hosts = ["example.test", "sub.example.test"]
+        cases = [
+            ("https://example.test", hosts, True),
+            ("https://sub.example.test", hosts, True),
+            ("https://outside.example.invalid", hosts, False),
+            ("https://fakeexample.test", hosts, False),
+            ("ftp://example.test", hosts, False),
+            ("invalid-url", hosts, False),
+            (self.base_url + "/ok", self.allowed_hosts, True),
+            (self.base_url.replace("http://", "https://"), self.allowed_hosts, False),
+            (self.base_url, ["127.0.0.1"], False),
+        ]
+        for url, allowed, expected in cases:
+            with self.subTest(url=url, allowed=allowed):
+                self.assertEqual(is_in_scope(url, allowed), expected)
+
+        with patch("scanner.client.requests.Session.get") as get:
+            failed = scan_url("https://outside.example.invalid", hosts)
+        get.assert_not_called()
+        self.assert_result_schema(failed)
+        self.assertEqual(failed["status"], "failed")
 
     def test_normal_response_and_headers(self):
         result = scan_url(
@@ -88,6 +122,7 @@ class ScannerEdgeCaseTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["status_code"], 200)
+        self.assert_result_schema(result)
         self.assertIn("Content-Security-Policy", result["headers"])
         self.assertIn("X-Content-Type-Options", result["headers"])
 

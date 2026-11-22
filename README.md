@@ -26,9 +26,9 @@ Nhóm demo trên ứng dụng web cục bộ do nhóm kiểm soát. Bộ quét d
 
 ## Kế hoạch thực hiện
 
-Xem [bản phân công 6 tuần cho 5 thành viên](PHAN_CONG.md) và [thiết kế dashboard tuần 1](TUAN_1_THIET_KE_DASHBOARD.md).
+Xem [bản phân công 6 tuần cho 5 thành viên](PHAN_CONG.md) và [bản ghi tiến độ ngày 20/11/2026](PROGRESS.md).
 
-Xem [tiến độ hiện tại của từng thành viên](PROGRESS.md).
+Dashboard ghi yêu cầu vào SQLite. Worker nhận yêu cầu và chuyển phản hồi HTTP từ [bộ quét](scanner/README.MD) cho các quy tắc. Worker lưu kết quả, phát hiện và cảnh báo để dashboard và bộ xuất báo cáo đọc lại theo mã lượt quét.
 
 ## Chạy demo tích hợp
 
@@ -98,13 +98,17 @@ python -m streamlit run dashboard/app.py --server.address 127.0.0.1
 python -X utf8 worker.py --disable-rule SEC-HDR-CSP
 ```
 
-Xem [kết quả kiểm thử dashboard và kịch bản bàn giao tuần 6](TUAN_5_6_NGHIEM_THU_VA_DEMO.md).
+## Kiểm thử cục bộ
 
-### Kiểm thử cục bộ
-
-```text
-python -m unittest scanner.test_client_edge_cases -v
-python -m unittest detection_rules.test_rules -v
-python -m unittest discover -s tests -v
-python -m unittest test_scheduler -v
+```powershell
+python -m pip install pytest
+python -X utf8 -m pytest -q
 ```
+
+Bộ kiểm thử dùng máy chủ cục bộ hoặc phản hồi giả lập, cùng SQLite tạm. Có thể chạy bài kiểm tra SQLite đa tiến trình riêng.
+
+```powershell
+python -X utf8 test_db_concurrency.py
+```
+
+Xem [các ca nghiệm thu](kiem_thu.md) và [danh sách URL của web demo](Web_demo/README.md).

@@ -4,31 +4,15 @@ from pathlib import Path
 import sqlite3
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from detection_rules.rules import analyze_response
 from Reporter.Export import export_csv, export_html, load_report
-from scanner import is_in_scope, scan_url
 from storage.db import create_scan_job, init_db, save_scan_report
 from worker import process_one_job
 
 
 class DemoRegressionTests(TestCase):
-    def test_redirect_to_another_port_is_blocked(self):
-        origin = "http://127.0.0.1:5000"
-        redirect = "http://127.0.0.1:5001/"
-        self.assertTrue(is_in_scope(origin + "/secure", [origin]))
-        self.assertFalse(is_in_scope("https://127.0.0.1:5000/", [origin]))
-        self.assertFalse(is_in_scope(redirect, ["127.0.0.1"]))
-
-        response = Mock(status_code=302, url=origin + "/", headers={"Location": redirect})
-        with patch("scanner.client.requests.Session.get", return_value=response) as get:
-            result = scan_url(origin + "/", [origin])
-
-        self.assertEqual(result["status"], "failed")
-        self.assertIn("outside allowed scope", result["error"])
-        get.assert_called_once()
-
     def test_httponly_checks_the_session_cookie_itself(self):
         findings = analyze_response({
             "headers": {

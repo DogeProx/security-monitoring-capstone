@@ -10,4 +10,4 @@ Các mốc dưới đây dựa trên đầu ra của [kế hoạch 6 tuần](PHA
 | **Phan Tuấn Tài** | **Tuần 5** | Đã tích hợp ba quy tắc, cấu hình bật/tắt trong worker và kiểm thử JSON, trang sạch, trang thiếu cấu hình và trang không đặt cookie phiên. Còn tổng hợp đối chiếu mức độ từng quy tắc với ngưỡng cảnh báo cho phần trình bày. |
 | **Vũ Đắc Lộc** | **Tuần 6** | Đã hoàn tất kiểm thử web demo (7 endpoint), ca biên và xuất CSV/HTML trên cả Windows và Linux (WSL). Đã chạy lại toàn bộ quy trình từ cơ sở dữ liệu mới và đối chiếu khớp số liệu với dashboard. Sẵn sàng trình bày phần demo và báo cáo. |
 
-[Kịch bản tổng duyệt và kết quả kiểm thử dashboard](TUAN_5_6_NGHIEM_THU_VA_DEMO.md).
+[Hướng dẫn chạy demo tích hợp](README.md#chạy-demo-tích-hợp) và [các ca nghiệm thu](kiem_thu.md).

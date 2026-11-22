@@ -26,13 +26,8 @@ scanner/
 ├── scope.py
 ├── README.MD
 │
-├── test_client.py
 ├── test_client_edge_cases.py
-├── test_public_interface.py
-├── test_result_schema.py
-├── test_runner.py
-├── test_scope.py
-└── test_scope_integration.py
+└── test_runner.py
 ```
 
 ### Vai trò từng file
@@ -42,11 +37,8 @@ scanner/
 | client.py | Thực hiện HTTP request và thu thập response |
 | runner.py | Điều phối quá trình quét nhiều URL |
 | scope.py | Kiểm tra URL có thuộc phạm vi cho phép |
-| test_client.py | Kiểm thử HTTP Client |
-| test_client_edge_cases.py | Kiểm thử các tình huống biên |
-| test_public_interface.py | Kiểm tra giao diện sử dụng công khai |
-| test_result_schema.py | Kiểm tra cấu trúc kết quả |
-| test_runner.py | Kiểm thử quá trình điều phối |
+| test_client_edge_cases.py | Kiểm thử client, phạm vi, chuyển hướng và cấu trúc phản hồi |
+| test_runner.py | Kiểm thử hàm `scanner.run_scan()`, trạng thái tổng hợp và tiến độ |
 
 ## 3. Luồng hoạt động
 
@@ -111,7 +103,7 @@ Scanner hỗ trợ các mã chuyển hướng:
 
 Mỗi redirect được kiểm tra phạm vi trước khi tiếp tục truy cập.
 
-Nếu redirect dẫn đến hostname ngoài phạm vi, scanner dừng quá trình truy cập.
+Nếu đích chuyển hướng nằm ngoài phạm vi, scanner dừng trước khi gửi yêu cầu tới đích.
 
 ### 4.4. Timeout Handling
 
@@ -137,17 +129,17 @@ Runner cũng hỗ trợ `progress_callback` để cập nhật tiến độ cho 
 
 Module cung cấp hàm `run_scan()` để các thành phần khác sử dụng.
 
-Ví dụ:
+Ví dụ với [web demo đang chạy trên cổng 5000](../Web_demo/README.md).
 
 ```python
 from scanner import run_scan
 
 report = run_scan(
     targets=[
-        "https://example.com"
+        "http://127.0.0.1:5000/secure"
     ],
     allowed_hosts=[
-        "example.com"
+        "http://127.0.0.1:5000"
     ]
 )
 
@@ -186,9 +178,7 @@ Các nhóm kiểm thử:
 - Partial Scan.
 - Progress Callback.
 
-Kết quả kiểm thử hiện tại:
-
-**11 passed, 0 failed.**
+Test HTTP dùng máy chủ cục bộ trên cổng tạm và test runner dùng phản hồi giả lập.
 
 ## 7. Tích hợp với hệ thống
 

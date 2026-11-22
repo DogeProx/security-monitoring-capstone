@@ -1,5 +1,5 @@
 
-from scanner.runner import run_scan
+from scanner import run_scan
 
 
 def fake_scan_url(url, allowed_hosts, timeout=5, max_redirects=5):
@@ -16,26 +16,18 @@ def fake_scan_url(url, allowed_hosts, timeout=5, max_redirects=5):
 
 
 def test_all_urls_completed(monkeypatch):
-    monkeypatch.setattr(
-        "scanner.runner.scan_url",
-        fake_scan_url
-    )
+    def completed_response(url, allowed_hosts, timeout=5, max_redirects=5):
+        return {"url": url, "status": "completed"}
 
+    monkeypatch.setattr("scanner.runner.scan_url", completed_response)
     report = run_scan(
-        targets=[
-            "https://example.com",
-            "https://example.org"
-        ],
-        allowed_hosts=[
-            "example.com",
-            "example.org"
-        ]
+        targets=["https://example.test/one", "https://example.test/two"],
+        allowed_hosts=["example.test"],
     )
 
-    assert report["status"] == "partial"
-    assert report["summary"]["total"] == 2
-    assert report["summary"]["completed"] == 1
-    assert report["summary"]["failed"] == 1
+    assert report["status"] == "completed"
+    assert report["summary"] == {"total": 2, "completed": 2, "failed": 0}
+    assert [item["scan_id"] for item in report["results"]] == [report["scan_id"]] * 2
 
 
 def test_partial_scan_continues_after_failure(monkeypatch):

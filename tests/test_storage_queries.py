@@ -1,20 +1,53 @@
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
 from storage.db import (
+    create_scan_job,
     get_alerts_with_details,
     get_all_scans,
+    get_connection,
+    get_pending_scan_job,
     get_report_data,
     init_db,
+    recover_stuck_jobs,
     record_finding_and_alert,
     save_scan_report,
     transition_alert,
+    update_scan_progress,
+    update_scan_status,
 )
 
 
 class StorageQueriesTests(TestCase):
+    def test_worker_recovery_requeues_only_running_jobs(self):
+        with TemporaryDirectory() as folder:
+            database = Path(folder) / "recovery.db"
+            init_db(database)
+            origin = "http://127.0.0.1:5000"
+            targets = [origin + "/secure"]
+            finished = create_scan_job(database, targets, [origin])
+            running = create_scan_job(database, targets, [origin])
+            waiting = create_scan_job(database, targets, [origin])
+            update_scan_status(database, finished, "COMPLETED")
+            self.assertEqual(get_pending_scan_job(database, running)["scan_id"], running)
+            update_scan_progress(database, running, 1, 1)
+
+            self.assertEqual(recover_stuck_jobs(database), 1)
+            self.assertEqual(recover_stuck_jobs(database), 0)
+
+            with closing(get_connection(database)) as conn:
+                states = {
+                    row["scan_id"]: (row["status"], row["started_at"], row["completed"])
+                    for row in conn.execute("SELECT scan_id, status, started_at, completed FROM scan_jobs")
+                }
+            self.assertEqual(states[finished][0], "COMPLETED")
+            self.assertEqual(states[running], ("PENDING", None, 0))
+            self.assertEqual(states[waiting], ("PENDING", None, 0))
+            self.assertEqual(get_pending_scan_job(database, running)["scan_id"], running)
+
     def test_queries_after_concurrent_writes_and_alert_transition(self):
         with TemporaryDirectory() as folder:
             database = Path(folder) / "test.db"

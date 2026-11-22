@@ -346,3 +346,17 @@ python -m pytest -q
 ```
 
 Bộ nghiệm thu tự dựng web localhost trên cổng trống và tạo SQLite tạm. Có thể chạy lại mà không cần khởi động worker hoặc web demo riêng.
+
+## Kiểm thử dashboard và báo cáo
+
+| Tình huống | Kết quả cần kiểm tra |
+|---|---|
+| Cơ sở dữ liệu trống | Dashboard hiển thị thông báo và cho phép tạo lượt đầu tiên. |
+| Quét cả ba URL demo | Có 3 URL phản hồi, 5 phát hiện và 1 cảnh báo mới mức Cao. Chọn một URL chỉ lọc danh sách phát hiện của URL đó. |
+| Quét `/secure` hoặc web demo không hoạt động | Trang mẫu có 0 phát hiện. Lượt mất kết nối hiển thị trạng thái Thất bại và thông tin lỗi. |
+| Xử lý cảnh báo | Cảnh báo chuyển từ Mới sang Đã xem rồi Đã xử lý. Mỗi thao tác được ghi vào lịch sử. |
+| Xuất dữ liệu trống hoặc chứa ký tự HTML | CSV và HTML vẫn xuất được. Nội dung trong ô HTML được thoát ký tự. |
+
+```powershell
+python -X utf8 -m unittest tests.test_dashboard tests.test_demo_regressions -v
+```
