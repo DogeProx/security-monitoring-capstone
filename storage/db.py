@@ -691,7 +691,7 @@ def set_scheduled_scan_status(
 
         return cursor.rowcount > 0
 # ============================================================
-# DATA QUERIES (TUẦN 3 & TUẦN 4)
+# DATA QUERIES
 # ============================================================
 
 def get_all_scans(db_path: str):
