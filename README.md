@@ -1,5 +1,9 @@
 # Automated Web Security Scanner with Dashboard + Alert System
 
+**Công cụ AI sử dụng** · Gemini, ChatGPT, Claude
+
+**Video demo** · [Xem trên YouTube](https://youtu.be/OjLv2z29F2Q)
+
 Đồ án xây dựng công cụ tự động kiểm tra cấu hình bảo mật của ứng dụng web trong môi trường thử nghiệm. Bộ quét đọc phản hồi HTTP để ghi nhận các phát hiện, chẳng hạn header bảo mật bị thiếu hoặc cookie phiên thiếu thuộc tính bảo vệ. Dashboard giúp nhóm xem bằng chứng, theo dõi cảnh báo và xuất báo cáo.
 
 ## Phạm vi triển khai
